@@ -382,6 +382,7 @@ el('stage-look').onchange = () => {
 };
 function snapshot(s) {
   applyLiveClear(s.liveTranscriptBoundary);
+  el('demo-notice').hidden = !s.publicDemo;
   document.querySelectorAll('[data-event]').forEach((n) => (n.textContent = s.name));
   mapping = s.mapping;
   rows.clear();
@@ -1206,7 +1207,7 @@ async function boot() {
     }
   }
   try {
-    await api('login', 'POST', { local: true });
+    await api('login', 'POST', { local: true, guest: true });
     await enter();
   } catch (e) {
     el('login').hidden = false;

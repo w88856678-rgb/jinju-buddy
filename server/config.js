@@ -19,6 +19,7 @@ export const config = {
   host: settings.HOST || '0.0.0.0',
   dir: join(settings.BUDDY_DATA_DIR || join(root, 'data'), eventId),
   localControl: settings.BUDDY_LOCAL_CONTROL !== '0',
+  publicDemo: settings.BUDDY_PUBLIC_DEMO === '1',
   fontDir: settings.BUDDY_FONT_DIR,
   tlsCert: settings.TLS_CERT_FILE,
   tlsKey: settings.TLS_KEY_FILE,

@@ -207,8 +207,9 @@ const correction = (s) => isCorrection(s.body);
 const bareCorrection = row => correction(row) &&
   /^(?:正确的是|实际上是|应该是|应当是|是)[零〇两一二三四五六七八九十百千万亿点\d.]+(?:位|名|户|人|票|次|家|天|个月|年|元|万元|小时|分钟|个百分点|%)[。！!]?$/u.test(row.reading);
 const modelProblem = '模型返回不完整或摘录与原文不符，可重新提炼';
-async function requestQuote(token, payload, format, maxTokens) {
+async function requestQuote(token, payload, format, maxTokens, chargeRequest) {
   if (!token) throw new Error('尚未配置 Hy4 Flash 密钥');
+  chargeRequest?.();
   let response;
   try {
     response = await fetch(endpoint, {
@@ -525,7 +526,7 @@ function choose(decision, parts, before, last, rows) {
   if (main.status==='error' && failure) throw failure;
   return others.length ? { ...main, more:others } : main;
 }
-export async function extractQuote(token, item, context = []) {
+export async function extractQuote(token, item, context = [], chargeRequest) {
   if (partingWord.test(item.body.trim()) || isBriefReply(item, context.at(-1))) return { status: 'skip' };
   const rows = prepareReadings(correction(item) ? [item] : [...context, item], readingText);
   const current = rows.at(-1);
@@ -537,7 +538,7 @@ export async function extractQuote(token, item, context = []) {
   if (unfinished(current.reading) && !/[。！？!?].+\S/u.test(current.reading)) return { status: 'waiting' };
   const { payload, parts } = modelInput(rows, rows.length - 1);
   const at = performance.now();
-  const result = await requestQuote(token, payload, singleFormat, 480);
+  const result = await requestQuote(token, payload, singleFormat, 480, chargeRequest);
   const received = performance.now();
   try {
     const card = choose(result, parts, 0, rows.length, rows);
@@ -547,12 +548,12 @@ export async function extractQuote(token, item, context = []) {
     throw new Error(modelProblem);
   }
 }
-export async function extractQuoteBatch(token, items, context) {
+export async function extractQuoteBatch(token, items, context, chargeRequest) {
   if (items.every((s) => partingWord.test(s.body.trim()))) return items.map(() => ({ status: 'skip' }));
   const rows = prepareReadings([...context, ...items], readingText);
   const { payload, parts } = modelInput(rows, context.length);
   const at = performance.now();
-  const result = await requestQuote(token, payload, batchFormat, 1250);
+  const result = await requestQuote(token, payload, batchFormat, 1250, chargeRequest);
   const received = performance.now();
   if (!Array.isArray(result?.decisions)) throw new Error(modelProblem);
   const decisions = result.decisions.map(proofNumbers);

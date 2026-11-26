@@ -14,6 +14,7 @@ import { sourceConcern, reportingLead, sourceRef } from './editor-cards.js';
 import { Store } from './store.js';
 import { QuoteQueue, extractQuote, extractQuoteBatch } from './quotes.js';
 import { bridgeAudio } from './asr.js';
+import { demoAllowance } from './public-demo.js';
 import { quoteText, roles } from '../public/format.js';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -114,8 +115,11 @@ export function createApp(options = {}) {
   const cfg = { ...config, ...options.config };
   const keys = options.credentials || credentials;
   const base = '/e/' + cfg.id;
-  const store = new Store(cfg.dir);
-  const keyFile = join(cfg.dir, 'control.key');
+  const publicDemo = cfg.publicDemo === true && cfg.id === 'public-demo';
+  const activityDir = publicDemo ? join(cfg.dir, 'open-rehearsal') : cfg.dir;
+  const store = new Store(activityDir);
+  const allowance = publicDemo ? demoAllowance(store) : null;
+  const keyFile = join(activityDir, 'control.key');
   try {
     writeFileSync(keyFile, randomBytes(24).toString('base64url') + '\n', { flag: 'wx', mode: 0o600 });
   } catch (e) {
@@ -127,8 +131,19 @@ export function createApp(options = {}) {
     .update('control-session:' + cfg.id)
     .digest('hex');
   const cookie = 'buddy_' + cfg.id;
-  const authorized = (req) =>
-    (req.headers.cookie || '').split(';').some((part) => safeEqual(part.trim(), cookie + '=' + session));
+  const guestSession = publicDemo
+    ? createHmac('sha256', operatorKey).update('public-rehearsal:' + cfg.id).digest('hex')
+    : null;
+  const authorized = (req) => (req.headers.cookie || '').split(';').some((part) => {
+    const value = part.trim();
+    return safeEqual(value, cookie + '=' + session) ||
+      (publicDemo && safeEqual(value, cookie + '=' + guestSession));
+  });
+  function setSession(req, res, value) {
+    const secure = req.socket.encrypted || req.headers['x-forwarded-proto'] === 'https';
+    res.setHeader('Set-Cookie', cookie + '=' + value + '; Path=' + base +
+      '/; HttpOnly; SameSite=Strict' + (secure ? '; Secure' : ''));
+  }
   const failureLogins = new Map();
   const stages = new Map(),
     controls = new Set();
@@ -169,14 +184,14 @@ export function createApp(options = {}) {
     privateEvent({type:'segment',row:controlRow(row)});
     if (!row.extra) for (const card of store.cards.affected(row.id)) privateEvent({type:'segment',row:controlRow(card)});
   };
-  const generate = options.generate || ((s,c)=>extractQuote(keys().token,s,c));
+  const generate = options.generate || ((s,c)=>extractQuote(keys().token,s,c,allowance?.modelRequest));
   const queue = new QuoteQueue(
     store,
     generate,
     segmentEvent,
     {
       ...options.quoteTiming,
-      generateBatch: options.generateBatch || (!options.generate ? (items, context) => extractQuoteBatch(keys().token, items, context) : null),
+      generateBatch: options.generateBatch || (!options.generate ? (items, context) => extractQuoteBatch(keys().token, items, context, allowance?.modelRequest) : null),
     }
   );
   const ingest = ({ invalidated = [], correctionUpdates = [], ...row }) => {
@@ -212,6 +227,7 @@ export function createApp(options = {}) {
     const auth = keys();
     return {
       name: cfg.name,
+      publicDemo,
       screen: store.screen(),
       history: store.history(),
       ...store.qrState(),
@@ -272,7 +288,11 @@ export function createApp(options = {}) {
     if (!route.startsWith('/api/')) throw fail(404, '没有找到这个页面');
     if (!get && (!sameOrigin(req) || req.method !== 'POST')) throw fail(403, '只接受本活动控台操作');
     if (route === '/api/login' && !get) {
-      const { password, local } = await jsonBody(req);
+      const { password, local, guest } = await jsonBody(req);
+      if (guest === true && publicDemo) {
+        setSession(req, res, guestSession);
+        return json(res, { ok: true });
+      }
       const auto = local && cfg.localControl && localOperator(req);
       if (!auto) {
         if (local || typeof password !== 'string') throw fail(401, '请输入本场控台口令');
@@ -290,17 +310,7 @@ export function createApp(options = {}) {
         }
         failureLogins.delete(address);
       }
-      const secure = req.socket.encrypted || req.headers['x-forwarded-proto'] === 'https';
-      res.setHeader(
-        'Set-Cookie',
-        cookie +
-          '=' +
-          session +
-          '; Path=' +
-          base +
-          '/; HttpOnly; SameSite=Strict' +
-          (secure ? '; Secure' : '')
-      );
+      setSession(req, res, session);
       return json(res, { ok: true });
     }
     if (!authorized(req)) throw fail(401, '此操作需要本场控台权限');
@@ -403,7 +413,7 @@ export function createApp(options = {}) {
       const rows = selected.map(r=>({...r,speaker:'operator-selected',review:null}));
       let output;
       try { output = await generate(rows.at(-1),rows.slice(0,-1)); }
-      catch (error) { throw fail(503,error.message || '提炼服务暂时不可用，请重试'); }
+      catch (error) { throw fail(error.status || 503,error.message || '提炼服务暂时不可用，请重试'); }
       store.cards.resolve(refs,true);
       const result = typeof output === 'string' ? {status:'ready',quote:output} : output;
       if (result?.status !== 'ready' || !candidateLayout(result.quote) || incompleteCard(result.quote))
@@ -517,10 +527,12 @@ export function createApp(options = {}) {
           ws.close(1000);
           return;
         }
-        notifyAudio({ state: 'connecting', partial: '', provider, mode });
         try {
+          const chargeAudio = allowance?.startAudio();
+          notifyAudio({ state: 'connecting', partial: '', provider, mode });
           endAudio = bridgeAudio({
             mode,
+            chargeAudio,
             client: ws,
             keys: auth,
             store,
@@ -534,8 +546,8 @@ export function createApp(options = {}) {
               queue.flush();
             },
           });
-        } catch {
-          notifyAudio({ state: 'idle', partial: '', message: '腾讯云识别配置有误，请核对后台凭证' });
+        } catch (error) {
+          notifyAudio({ state: 'idle', partial: '', message: error.status === 429 ? error.message : '腾讯云识别配置有误，请核对后台凭证' });
           sendWs(ws, { type: 'error', message: audio.message });
           ws.close(1000);
         }

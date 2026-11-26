@@ -73,6 +73,7 @@ export function bridgeAudio({
   keys,
   store,
   addSegment,
+  chargeAudio,
   onSpeech = () => {},
   onCorrection = () => {},
   notify,
@@ -142,6 +143,17 @@ export function bridgeAudio({
     if (cloud.readyState === WebSocket.OPEN) send(cloud, { type: 'end' });
     update('draining');
     timer = setTimeout(() => close('未收到腾讯云结束确认，请核对最后一段'), 15000);
+  }
+  function audioAllowed(nextMs) {
+    try {
+      chargeAudio(nextMs);
+      return true;
+    } catch (error) {
+      disconnectNote = error.status === 429 ? error.message : '暂时无法记录体验收音时长，请稍后重试。';
+      if (offset === undefined) close(disconnectNote);
+      else end();
+      return false;
+    }
   }
   function ready() {
     if (offset !== undefined) return;
@@ -238,6 +250,7 @@ export function bridgeAudio({
     if (Number(m.final) === 1) close();
   }
   const meter = setInterval(() => {
+    if (chargeAudio && !ending && !done && !audioAllowed(stats.receivedMs)) return;
     if (offset !== undefined && !ending && !done && Date.now() - lastEmit >= 480) update('recording');
   }, 500);
   meter.unref();
@@ -274,6 +287,7 @@ export function bridgeAudio({
     if (offset === undefined || cloud.readyState !== WebSocket.OPEN) return close('识别服务尚未就绪，请重连');
     if (!data.length || data.length > 12800 || data.length % 2) return close('音频分片格式有误');
     if (cloud.bufferedAmount > 64000) return close('云端网络拥堵，请重新开始收音');
+    if (chargeAudio && !audioAllowed(stats.receivedMs + data.length / 32)) return;
     const now = Date.now();
     if (lastPacket) stats.maxGapMs = Math.max(stats.maxGapMs, now - lastPacket);
     lastPacket = now;
