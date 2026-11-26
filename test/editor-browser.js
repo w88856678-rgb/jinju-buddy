@@ -106,7 +106,7 @@ try {
   // A missing film atlas must still leave a readable, acknowledged frame on a fresh stage.
   const fallback = await browser.newPage({viewport:{width:512,height:128}});
   let atlasRequests = 0;
-  await fallback.route(/\/buddy-(?:play|wave)-\d+\.webp$/, route => {
+  await fallback.route(/\/buddy-(?:play-\d+|film-2x)\.webp$/, route => {
     atlasRequests++;
     return route.abort('failed');
   });

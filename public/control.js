@@ -151,9 +151,9 @@ function updateShowLabel() {
   const waveLabel = waving && now < cue.startsAt ? '准备挥手' : '招呼中';
   el('on-air').textContent = screen.kind === 'qr' ? '二维码' : seconds ? '金句 · ' + seconds + ' 秒' : waving ? waveLabel : '待场';
   const greet = el('greet');
-  greet.textContent = waving ? waveLabel : 'Buddy 打招呼';
+  el('greet-label').textContent = waving ? waveLabel : 'Buddy 打招呼';
   greet.disabled = !connected || publishing || screen.kind !== 'idle' || waving;
-  el('clear').disabled = publishing || (screen.kind === 'idle' && !waving);
+  el('clear').disabled = !connected || publishing || (screen.kind === 'idle' && !waving);
   const ticks = [];
   if (remaining) ticks.push(remaining - (seconds - 1) * 1000);
   if (waving) ticks.push((now < cue.startsAt ? cue.startsAt : cue.startsAt + waveDuration) - now);

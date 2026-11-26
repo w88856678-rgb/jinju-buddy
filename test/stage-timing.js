@@ -45,12 +45,21 @@ try {
   await Promise.all([desk, ...screens].map(page => page.locator('.led-buddy[data-motion="wave"]').waitFor()));
   await Promise.all(screens.map(p => p.waitForFunction(() => window.stageTrace.wave)));
   const waveTimes = await Promise.all(screens.map(p => p.evaluate(() => window.stageTrace.wave)));
+  for (const page of screens) {
+    const clip = await page.locator('.led-greeting').evaluate(v => ({
+      file: new URL(v.currentSrc).pathname, duration: v.duration, rate: v.playbackRate,
+      width: v.videoWidth, height: v.videoHeight, visible: v.checkVisibility({ visibilityProperty: true }),
+    }));
+    assert.deepEqual(clip, { file: '/static/assets/buddy-greeting.mp4', duration: 12.76,
+      rate: 1, width: 2048, height: 512, visible: true });
+  }
   assert(await desk.locator('#greet').isDisabled());
   await desk.locator('#quote').fill('先听反馈，再改流程。');
   await desk.locator('#manual-send').click();
   const text = '先听反馈再改流程';
   await Promise.all([desk, ...screens].map(p => p.locator('.led-quote').getByText(text, { exact: true }).waitFor()));
   await until(async () => (await (await app.call('control')).json()).displayed === 2);
+  for (const page of screens) assert.equal(await page.locator('.led-greeting').isVisible(), false);
   const published = app.store.screen();
   assert.equal(published.text, text);
   assert.equal(await desk.locator('#receipt-count').innerText(), '2 / 2 屏回执');

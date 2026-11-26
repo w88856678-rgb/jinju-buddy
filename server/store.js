@@ -159,7 +159,7 @@ export class Store {
       throw Object.assign(new Error('二维码已在其他操作中更新，请核对后重试'), { status: 409 });
   }
   saveScreen(content) {
-    if (content.kind !== 'quote' && waveActive(this.get('buddyCue'), Date.now()))
+    if (waveActive(this.get('buddyCue'), Date.now()))
       this.set('buddyCue', { playOrigin: Date.now() });
     if (content.kind === 'quote') {
       const text = quoteText(content.text);
@@ -175,7 +175,13 @@ export class Store {
       .filter((item) => !same(item, previous) && !same(item, content));
     if (!same(previous, content)) history.unshift(previous);
     this.set('screenHistory', history.slice(0, 6));
-    this.set('screen', { ...content, version: previous.version + 1, publishedAt: Date.now() });
+    const now = Date.now();
+    if (content.kind === 'quote') {
+      // Rapid replacements share the gesture and show the latest words immediately.
+      content.quoteRunAt = previous.kind === 'quote' && quoteDeadline(previous) > now
+        ? previous.quoteRunAt ?? previous.publishedAt : now;
+    }
+    this.set('screen', { ...content, version: previous.version + 1, publishedAt: now });
   }
   history() {
     const exists = this.db.prepare('SELECT 1 FROM images WHERE id=?');

@@ -2,14 +2,15 @@ import { imageUrl, serverNow } from './ui.js';
 import { fontReady, layoutQuote, overflowHint } from './led-layout.js';
 import { ledQr } from './led-qr.js';
 import { createBuddyMotion } from './buddy-motion.js';
-import { fadeDuration, quoteDeadline, quoteRollDuration } from './show-timing.js';
+import { fadeDuration, quoteDeadline, quoteRollDuration, quoteRollAt, waveActive } from './show-timing.js';
 
 export function createScene(host, animate = false) {
   host.innerHTML = '<div class="scene" data-kind="idle"><div class="led-frame">' +
     '<div class="led-buddy" role="img" aria-label="手持小红花的 Buddy"></div>' +
     '<div class="led-words"><div class="led-quote-track"><div class="led-quote-outgoing" aria-hidden="true"></div>' +
     '<div class="led-quote" aria-live="polite" aria-atomic="true"></div></div></div>' +
-    '<div class="led-qr"><div class="led-code"></div><span>扫码看总结</span></div></div></div>';
+    '<div class="led-qr"><div class="led-code"></div><span>扫码看总结</span></div>' +
+    '<video class="led-greeting" aria-label="Buddy 打招呼" muted playsinline preload="auto" src="/static/assets/buddy-greeting.mp4"></video></div></div>';
   const scene = host.querySelector('.scene');
   const words = scene.querySelector('.led-words');
   const track = scene.querySelector('.led-quote-track');
@@ -17,7 +18,7 @@ export function createScene(host, animate = false) {
   const quote = scene.querySelector('.led-quote');
   const code = scene.querySelector('.led-code');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
-  const buddy = createBuddyMotion(scene.querySelector('.led-buddy'), animate, reduce);
+  const buddy = createBuddyMotion(scene.querySelector('.led-buddy'), scene.querySelector('.led-greeting'), animate, reduce);
   new ResizeObserver(([entry]) => {
     if (entry.contentRect.width) scene.style.setProperty('--led-scale', entry.contentRect.width / 512);
   }).observe(scene);
@@ -57,7 +58,7 @@ export function createScene(host, animate = false) {
   function startRoll(age) {
     outgoing.style.fontSize = quote.style.fontSize;
     outgoing.style.lineHeight = quote.style.lineHeight;
-    outgoing.replaceChildren(...(scene.dataset.kind === 'quote' ? quote.children : []));
+    outgoing.replaceChildren(...(scene.dataset.kind === 'quote' && visible && serverNow() >= quoteRollAt(visible) ? quote.children : []));
     // A last-moment replacement must not brighten or extend the outgoing quote.
     outgoingFade?.cancel();
     if (outgoing.childElementCount && visible)
@@ -76,7 +77,7 @@ export function createScene(host, animate = false) {
     if (screen.version !== wanted) return false;
     if (screen.kind === 'quote' && !layout) throw Object.assign(new Error(overflowHint), { overflow: true });
     const greeting = buddy.show(screen);
-    const age = Math.max(0, serverNow() - screen.publishedAt);
+    const age = layout ? serverNow() - quoteRollAt(screen) : 0;
     const expired = layout && serverNow() >= quoteDeadline(screen);
     const canRoll = animate && !reduce.matches && !document.hidden && age < quoteRollDuration;
     if (!layout || !canRoll || expired || (roll && outgoing.textContent === layout.lines.join(''))) roll?.finish();
@@ -117,7 +118,10 @@ export function createScene(host, animate = false) {
   }
   function show(screen) {
     if (screen.version < wanted) return Promise.resolve(false);
-    if (screen.version === current) return Promise.resolve(screen.kind !== 'quote' || serverNow() < quoteDeadline(screen));
+    const waitingForMovie = screen.kind === 'idle' && waveActive(screen.buddyCue, serverNow())
+      && !scene.querySelector('.led-frame').hasAttribute('data-movie-visible');
+    if (screen.version === current && !waitingForMovie)
+      return Promise.resolve(screen.kind !== 'quote' || serverNow() < quoteDeadline(screen));
     if (wanted === screen.version && inFlight) return inFlight;
     wanted = screen.version;
     inFlight = draw(screen).finally(() => { if (wanted === screen.version) inFlight = null; });

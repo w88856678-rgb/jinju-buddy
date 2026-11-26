@@ -30,6 +30,7 @@ const mime = {
   '.webp': 'image/webp',
   '.otf': 'font/otf',
   '.png': 'image/png',
+  '.mp4': 'video/mp4',
 };
 const safeEqual = (a, b) =>
   timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
@@ -78,16 +79,36 @@ function json(res, object, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(object));
 }
-function staticFile(res, file) {
+function staticFile(res, file, req) {
   if (!existsSync(file) || !statSync(file).isFile()) throw fail(404, '找不到文件');
-  res.writeHead(200, {
+  const size = statSync(file).size;
+  const headers = {
     'Content-Type': mime[extname(file)] || 'application/octet-stream',
-    'Content-Length': statSync(file).size,
-    'Cache-Control': /\.(webp|otf)$/.test(file) ? 'public, max-age=86400' : 'no-cache',
-  });
-  createReadStream(file)
-    .on('error', () => res.destroy())
-    .pipe(res);
+    'Content-Length': size,
+    'Cache-Control': /\.(webp|otf|mp4)$/.test(file) ? 'public, max-age=86400' : 'no-cache',
+  };
+  let range;
+  if (file.endsWith('.mp4')) {
+    headers['Accept-Ranges'] = 'bytes';
+    const requested = req.headers.range;
+    if (requested) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(requested);
+      const start = match?.[1] ? Number(match[1]) : Math.max(0, size - Number(match?.[2]));
+      const end = match?.[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+      if (!match || (!match[1] && !match[2]) || !Number.isSafeInteger(start) || start > end) {
+        res.writeHead(416, { 'Accept-Ranges': 'bytes', 'Content-Range': 'bytes */' + size });
+        return res.end();
+      }
+      range = { start, end };
+      headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + size;
+      headers['Content-Length'] = end - start + 1;
+    }
+  }
+  res.writeHead(range ? 206 : 200, headers);
+  if (req?.method === 'HEAD') return res.end();
+  const stream = createReadStream(file, range);
+  res.on('close', () => stream.destroy());
+  stream.on('error', () => res.destroy()).pipe(res);
 }
 function localIps() {
   const networks = Object.entries(networkInterfaces()).sort(([a], [b]) =>
@@ -283,6 +304,8 @@ export function createApp(options = {}) {
       res.writeHead(302, { Location: base + (path === '/stage' ? '/stage' : '/control') });
       return res.end();
     }
+    if ((get || req.method === 'HEAD') && path === '/static/assets/buddy-greeting.mp4')
+      return staticFile(res, join(publicDir, 'assets/buddy-greeting.mp4'), req);
     if (get && path === '/static/jsqr.js') return staticFile(res, browserQrDecoder);
     if (get && /^\/static\/(?:assets\/)?[a-z0-9-]+\.(js|css|webp|png)$/.test(path))
       return staticFile(res, join(publicDir, path.slice(8)));

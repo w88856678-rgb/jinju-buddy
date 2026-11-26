@@ -191,8 +191,29 @@ summary {
   background: url('/static/assets/buddy-play-poster.webp') center / contain no-repeat;
 }
 .led-buddy[data-ready] { background-image: none; }
-.led-buddy canvas { display: block; width: 100%; height: 100%; visibility: hidden; }
-.led-buddy[data-ready] canvas { visibility: visible; }
+.led-buddy canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 140ms ease-in-out;
+}
+.led-buddy[data-ready]:not([data-performing]) .idle-pose,
+.led-buddy[data-performing] .quote-pose { opacity: 1; }
+.led-buddy[data-performing] { background-image: none; }
+.led-frame { transition: background-color 180ms ease; }
+.led-frame[data-greeting] { background-color: black; }
+.led-greeting {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  visibility: hidden;
+}
+.scene[data-kind='idle'] .led-frame[data-movie-visible] .led-greeting { visibility: visible; }
 .led-words { position: absolute; inset: 0; pointer-events: none; }
 .scene[data-kind='qr'] .led-qr { display: flex; }
 .led-quote-track {

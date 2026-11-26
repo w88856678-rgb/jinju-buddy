@@ -13,6 +13,8 @@ function syncClock(timestamp, sent) {
   if (Math.abs(before - serverNow()) > 15) window.dispatchEvent(new Event('buddy-clock'));
 }
 const paths = {
+  hand: '<path d="M8 12V6a1.5 1.5 0 0 1 3 0v5-7a1.5 1.5 0 0 1 3 0v7-6a1.5 1.5 0 0 1 3 0v7-3a1.5 1.5 0 0 1 3 0v5c0 4.5-2.7 7-6.4 7-2.2 0-3.7-.9-5-2.6l-4-5.5a1.6 1.6 0 0 1 2.5-2zM3 5l1 2m15-5 1 2"/>',
+  standby: '<path d="M4 12a8 8 0 1 0 2-5.3L3 9m0-5v5h5"/><path d="m10 9 5 3-5 3z" fill="currentColor" stroke-width="1"/>',
   screen: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/>',
   external: '<path d="M7 17 18 6M9 6h9v9"/>',
   pen: '<path d="m4 16-1 5 5-1L20 8l-4-4zM14 6l4 4"/>',

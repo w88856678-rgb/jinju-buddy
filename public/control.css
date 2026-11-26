@@ -628,10 +628,20 @@ select {
   overflow-wrap: anywhere;
 }
 .monitor-actions {
-  justify-content: space-between;
   flex-wrap: wrap;
-  margin: 5px -7px 4px;
+  gap: 8px;
+  margin: 12px 0 8px;
 }
+.monitor-actions .button {
+  min-height: 44px;
+  padding-inline: 14px;
+}
+.monitor-actions #clear:not(:disabled) {
+  background: var(--sage);
+  border-color: #9aaa97;
+}
+.monitor-actions #clear:hover:not(:disabled) { background: #d9e6d4; }
+.monitor-actions #undo-screen { margin-left: auto; }
 .history > summary {
   min-height: 41px;
 }
