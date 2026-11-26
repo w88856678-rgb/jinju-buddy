@@ -64,6 +64,16 @@ try {
   app.server.on('upgrade', (req, socket) => {
     if (req.url.endsWith('role=stage')) stageSocket = socket;
   });
+  // Deliver one replacement after the full 180 ms roll would already have elapsed in transit.
+  await stage.routeWebSocket(url => url.searchParams.get('role') === 'stage', route => {
+    const upstream = route.connectToServer();
+    upstream.onMessage(message => {
+      const update = JSON.parse(message);
+      if (update.type === 'screen' && update.screen.text === '正在进场的金句')
+        setTimeout(() => route.send(message), 300);
+      else route.send(message);
+    });
+  });
   await stage.goto(stageAddress.href);
   await stage.locator('.scene[data-kind="idle"]').waitFor();
   await control.getByText('大屏已连接', { exact: true }).waitFor();
@@ -127,11 +137,11 @@ try {
       above: old.getBoundingClientRect().top < top,
       below: n.querySelector('.led-quote').getBoundingClientRect().top > top,
       count: animations.length, time: animations[0].currentTime - animations[0].effect.getTiming().delay,
-      duration: animations[0].effect.getTiming().duration,
+      duration: animations[0].effect.getTiming().duration, delay: animations[0].effect.getTiming().delay,
     };
   });
   assert.deepEqual(duringRoll, {
-    old: '第一句测试金句', hiddenFromSpeech: 'true', above: true, below: true, count: 1, time: 75, duration: 180,
+    old: '第一句测试金句', hiddenFromSpeech: 'true', above: true, below: true, count: 1, time: 75, duration: 180, delay: 0,
   });
   await track.evaluate(n => n.getAnimations()[0].play());
   await until(async () => (await (await app.call('control')).json()).displayed === 1);

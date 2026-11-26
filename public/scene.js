@@ -55,10 +55,10 @@ export function createScene(host, animate = false) {
   reduce.addEventListener('change', () => { if (reduce.matches) roll?.finish(); deadline(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) roll?.finish(); deadline(); });
 
-  function startRoll(age) {
+  function startRoll(age, hasOutgoingQuote) {
     outgoing.style.fontSize = quote.style.fontSize;
     outgoing.style.lineHeight = quote.style.lineHeight;
-    outgoing.replaceChildren(...(scene.dataset.kind === 'quote' && visible && serverNow() >= quoteRollAt(visible) ? quote.children : []));
+    outgoing.replaceChildren(...(hasOutgoingQuote ? quote.children : []));
     // A last-moment replacement must not brighten or extend the outgoing quote.
     outgoingFade?.cancel();
     if (outgoing.childElementCount && visible)
@@ -77,12 +77,15 @@ export function createScene(host, animate = false) {
     if (screen.version !== wanted) return false;
     if (screen.kind === 'quote' && !layout) throw Object.assign(new Error(overflowHint), { overflow: true });
     const greeting = buddy.show(screen);
-    const age = layout ? serverNow() - quoteRollAt(screen) : 0;
-    const expired = layout && serverNow() >= quoteDeadline(screen);
+    const now = serverNow();
+    const hasOutgoingQuote = visible?.kind === 'quote' && now >= quoteRollAt(visible) && now < quoteDeadline(visible);
+    // Roll from the quote actually on this screen. Network transit must not consume its transition.
+    const age = layout && !hasOutgoingQuote ? now - quoteRollAt(screen) : 0;
+    const expired = layout && now >= quoteDeadline(screen);
     const canRoll = animate && !reduce.matches && !document.hidden && age < quoteRollDuration;
     if (!layout || !canRoll || expired || (roll && outgoing.textContent === layout.lines.join(''))) roll?.finish();
     if (layout && !expired) {
-      if (canRoll && !roll) startRoll(age);
+      if (canRoll && !roll) startRoll(age, hasOutgoingQuote);
       quote.style.fontSize = layout.size + 'px';
       quote.style.lineHeight = layout.leading + 'px';
       quote.replaceChildren(...layout.lines.map(line => {
