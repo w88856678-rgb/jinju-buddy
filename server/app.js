@@ -167,6 +167,7 @@ export function createApp(options = {}) {
       '/; HttpOnly; SameSite=Strict' + (secure ? '; Secure' : ''));
   }
   const failureLogins = new Map();
+  const warmStages = new WeakSet();
   const stages = new Map(),
     controls = new Set();
   const qrTargets = new Map();
@@ -186,12 +187,15 @@ export function createApp(options = {}) {
   const presence = () => {
     const ackVersion = store.screen().version;
     const acknowledged = new Map();
-    for (const last of stages.values()) {
+    let greetingReadyScreens = 0;
+    for (const [ws, last] of stages) {
+      if (warmStages.has(ws)) greetingReadyScreens++;
       if (last) acknowledged.set(last.version, { ...last, count: (acknowledged.get(last.version)?.count || 0) + 1 });
     }
     return {
       ackVersion,
       online: stages.size,
+      greetingReadyScreens,
       displayed: acknowledged.get(ackVersion)?.count || 0,
       acknowledgements: [...acknowledged.values()],
     };
@@ -398,6 +402,8 @@ export function createApp(options = {}) {
     }
     if (route === '/api/publish') {
       const op = opId(data.op);
+      if (data.kind === 'cancel-greet')
+        return json(res, updateDisplay(() => store.cancelGreeting(op, opId(data.greetingOp))));
       if (data.kind === 'greet') return json(res, updateDisplay(() => store.greet(op, data.currentVersion)));
       if (data.kind === 'history') {
         const item = store.history().find((s) => s.version === data.version);
@@ -540,6 +546,11 @@ export function createApp(options = {}) {
           if (binary) return;
           try {
             const m = JSON.parse(raw);
+            if (m.type === 'greeting-ready' && !warmStages.has(ws)) {
+              warmStages.add(ws);
+              presenceEvent();
+              return;
+            }
             if (m.type === 'hidden' && stages.get(ws)) {
               stages.set(ws, null);
               presenceEvent();

@@ -108,6 +108,7 @@ export class Store {
   }
   greet(op, expectedVersion) {
     return this.once(op, () => {
+      if (this.db.prepare('SELECT 1 FROM operations WHERE id=?').get('cancel-greeting:' + op)) return;
       const screen = this.screen(), now = Date.now();
       const previous = this.get('buddyCue');
       if (screen.kind !== 'idle')
@@ -115,8 +116,17 @@ export class Store {
       if (waveActive(previous, now)) return;
       if (expectedVersion !== screen.version)
         throw Object.assign(new Error('画面已切换，请核对当前监看。'), { status: 409 });
-      this.set('buddyCue', planWave(previous, now));
+      this.set('buddyCue', { ...planWave(previous, now), op });
       this.set('screen', { ...screen, version: screen.version + 1, publishedAt: now });
+    });
+  }
+  cancelGreeting(op, target) {
+    return this.once(op, () => {
+      // The cancel request can beat the original POST over a slow connection.
+      this.db.prepare('INSERT OR IGNORE INTO operations(id) VALUES(?)').run('cancel-greeting:' + target);
+      const cue = this.get('buddyCue');
+      if (this.screen().kind === 'idle' && cue?.op === target && waveActive(cue, Date.now()))
+        this.saveScreen({ kind: 'idle' });
     });
   }
   expireQuote(version) {

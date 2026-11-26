@@ -10,7 +10,7 @@ export function createScene(host, animate = false) {
     '<div class="led-words"><div class="led-quote-track"><div class="led-quote-outgoing" aria-hidden="true"></div>' +
     '<div class="led-quote" aria-live="polite" aria-atomic="true"></div></div></div>' +
     '<div class="led-qr"><div class="led-code"></div><span>扫码看总结</span></div>' +
-    '<video class="led-greeting" aria-label="Buddy 打招呼" muted playsinline preload="auto" src="/static/assets/buddy-greeting.mp4"></video></div></div>';
+    '<canvas class="led-greeting" aria-hidden="true"></canvas></div></div>';
   const scene = host.querySelector('.scene');
   const words = scene.querySelector('.led-words');
   const track = scene.querySelector('.led-quote-track');
@@ -118,14 +118,14 @@ export function createScene(host, animate = false) {
   }
   function show(screen) {
     if (screen.version < wanted) return Promise.resolve(false);
-    const waitingForMovie = screen.kind === 'idle' && waveActive(screen.buddyCue, serverNow())
-      && !scene.querySelector('.led-frame').hasAttribute('data-movie-visible');
-    if (screen.version === current && !waitingForMovie)
+    const waitingForGreeting = screen.kind === 'idle' && waveActive(screen.buddyCue, serverNow())
+      && !buddy.playingGreeting();
+    if (screen.version === current && !waitingForGreeting)
       return Promise.resolve(screen.kind !== 'quote' || serverNow() < quoteDeadline(screen));
     if (wanted === screen.version && inFlight) return inFlight;
     wanted = screen.version;
     inFlight = draw(screen).finally(() => { if (wanted === screen.version) inFlight = null; });
     return inFlight;
   }
-  return { show };
+  return { show, greetingReady: buddy.greetingReady };
 }

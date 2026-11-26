@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { chromium } from 'playwright';
+import sharp from 'sharp';
+import { film } from '../public/buddy-frames.js';
 import { testApp, until } from './support.js';
 
 const app = await testApp();
@@ -36,22 +38,65 @@ try {
     }
     requestAnimationFrame(sample);
   });
+  // Hold the last sheet on one cold projector. An operator can cancel while it warms.
+  let releaseSheet;
+  const hold = new Promise(resolve => { releaseSheet = resolve; });
+  await screens[1].route('**/buddy-hello-7.webp', async route => { await hold; await route.continue(); });
   await Promise.all([desk.goto(app.url + '/control'),
-    ...screens.map(page => page.goto(app.url + '/stage?look=dark&native=1'))]);
+    ...screens.map((page,i) => page.goto(app.url + '/stage?native=1&look=' + (i ? 'blue' : 'dark')))]);
   await Promise.all([desk, ...screens].map(page => page.locator('.led-buddy[data-motion="play"]').waitFor()));
   assert(screens.every(page => page.url().includes('/e/rehearsal/')));
   assert.equal(app.store.screen().version, 0);
+  const feedback = await desk.locator('#greet').evaluate(b => {
+    b.click();
+    return [b.textContent.trim(), b.disabled];
+  });
+  assert.deepEqual(feedback, ['准备打招呼…', true]);
+  await desk.locator('#clear').click();
+  releaseSheet();
+  await until(async () => (await (await app.call('control')).json()).greetingReadyScreens === 2);
+  assert.equal(app.store.screen().version, 0);
+  // A separate request can cancel even while the first POST is still in flight.
+  let letGreetingThrough, greetingSent, cancelArrived;
+  const delayedGreeting = new Promise(resolve => { letGreetingThrough = resolve; });
+  const delayedPost = new Promise(resolve => { greetingSent = resolve; });
+  const cancelResponse = new Promise(resolve => { cancelArrived = resolve; });
+  await desk.route('**/api/publish', async route => {
+    if (route.request().postDataJSON().kind === 'greet') {
+      greetingSent();
+      await delayedGreeting;
+    }
+    await route.continue();
+  });
+  desk.on('response', response => {
+    if (response.url().endsWith('/api/publish') && response.request().postDataJSON().kind === 'cancel-greet')
+      cancelArrived();
+  });
+  await desk.locator('#greet').click();
+  await delayedPost;
+  await desk.locator('#clear').click();
+  await cancelResponse;
+  letGreetingThrough();
+  await desk.waitForFunction(() => !document.querySelector('#greet').disabled);
+  await desk.unroute('**/api/publish');
+  assert.equal(app.store.screen().version, 0);
+  const backdrops = await Promise.all(screens.map(async page => {
+    return sharp(await page.screenshot()).extract({ left: 495, top: 20, width: 1, height: 1 }).raw().toBuffer();
+  }));
   await desk.getByRole('button', { name: 'Buddy 打招呼' }).press('Enter');
+  await desk.locator('#greet').evaluate(b => b.click());
   await Promise.all([desk, ...screens].map(page => page.locator('.led-buddy[data-motion="wave"]').waitFor()));
   await Promise.all(screens.map(p => p.waitForFunction(() => window.stageTrace.wave)));
+  assert.equal(app.store.screen().version, 1);
   const waveTimes = await Promise.all(screens.map(p => p.evaluate(() => window.stageTrace.wave)));
-  for (const page of screens) {
-    const clip = await page.locator('.led-greeting').evaluate(v => ({
-      file: new URL(v.currentSrc).pathname, duration: v.duration, rate: v.playbackRate,
-      width: v.videoWidth, height: v.videoHeight, visible: v.checkVisibility({ visibilityProperty: true }),
+  for (const [i,page] of screens.entries()) {
+    const surface = await page.locator('.led-greeting').evaluate(c => ({
+      visible: c.checkVisibility({ visibilityProperty: true }), width: c.width,
+      clearCorner: c.getContext('2d').getImageData(0,0,1,1).data[3]
     }));
-    assert.deepEqual(clip, { file: '/static/assets/buddy-greeting.mp4', duration: 12.76,
-      rate: 1, width: 2048, height: 512, visible: true });
+    assert.deepEqual(surface, { visible: true, width: film.greeting.cell, clearCorner: 0 });
+    const sample = await sharp(await page.screenshot()).extract({left:495,top:20,width:1,height:1}).raw().toBuffer();
+    assert.deepEqual(sample,backdrops[i]);
   }
   assert(await desk.locator('#greet').isDisabled());
   await desk.locator('#quote').fill('先听反馈，再改流程。');
@@ -59,7 +104,7 @@ try {
   const text = '先听反馈再改流程';
   await Promise.all([desk, ...screens].map(p => p.locator('.led-quote').getByText(text, { exact: true }).waitFor()));
   await until(async () => (await (await app.call('control')).json()).displayed === 2);
-  for (const page of screens) assert.equal(await page.locator('.led-greeting').isVisible(), false);
+  for (const page of screens) assert.equal(await page.locator('.led-frame').getAttribute('data-greeting-visible'), null);
   const published = app.store.screen();
   assert.equal(published.text, text);
   assert.equal(await desk.locator('#receipt-count').innerText(), '2 / 2 屏回执');

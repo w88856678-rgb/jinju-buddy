@@ -42,6 +42,6 @@ export function idleFrame(cue, now) {
   return ((frame % film.playFrames) + film.playFrames) % film.playFrames;
 }
 export function planWave(previous, now) {
-  // Both screens preload the original film and start it on the same server timestamp.
-  return { playOrigin: playOrigin(previous, now), startsAt: now + 200 };
+  // Leave a brief, cancellable beat to settle the idle pose on both screens.
+  return { playOrigin: playOrigin(previous, now), startsAt: now + 360 };
 }

@@ -35,6 +35,7 @@ let live,
   connected = false,
   screen = { version: -1, kind: 'idle' },
   online = 0,
+  greetingReadyScreens = 0,
   displayed = 0,
   ackVersion = -1,
   acknowledgements = [],
@@ -141,19 +142,53 @@ function receiptText() {
   if (shown < online) return '部分大屏已显示';
   return '大屏已显示';
 }
-let showLabelTimer;
+let showLabelTimer, preparedGreeting, preparationTimer, previewWarm = false, cancellingGreeting = false;
+preview.greetingReady.then(() => { previewWarm = true; releasePreparedGreeting(); });
+function discardPreparedGreeting() {
+  clearTimeout(preparationTimer);
+  preparedGreeting = undefined;
+}
+function releasePreparedGreeting(timeLimit = false) {
+  if (preparedGreeting === undefined) return;
+  const version = preparedGreeting;
+  if (!connected || screen.version !== version || screen.kind !== 'idle' || document.hidden || publishing) {
+    discardPreparedGreeting();
+    updateShowLabel();
+    return;
+  }
+  if (!timeLimit && (!previewWarm || greetingReadyScreens < online)) return;
+  discardPreparedGreeting();
+  publish({ kind: 'greet', currentVersion: version });
+}
+function requestGreeting() {
+  if (preparedGreeting !== undefined || el('greet').disabled) return;
+  preparedGreeting = screen.version;
+  updateShowLabel();
+  // A newly opened or old projector must not hold the other screens indefinitely.
+  preparationTimer = setTimeout(() => releasePreparedGreeting(true), 1200);
+  releasePreparedGreeting();
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && preparedGreeting !== undefined) {
+    discardPreparedGreeting();
+    updateShowLabel();
+  }
+});
 function updateShowLabel() {
   clearTimeout(showLabelTimer);
   const now = serverNow(), cue = screen.buddyCue;
   const waving = waveActive(cue, now);
   const remaining = screen.kind === 'quote' ? Math.max(0, quoteDeadline(screen) - now) : 0;
   const seconds = Math.ceil(remaining / 1000);
-  const waveLabel = waving && now < cue.startsAt ? '准备挥手' : '招呼中';
+  const preparing = preparedGreeting !== undefined || publishing === 'greet';
+  const waveLabel = now < cue?.startsAt ? '准备打招呼' :
+    online && (ackVersion !== screen.version || !displayed) ? '等待大屏显示' : '招呼中';
   el('on-air').textContent = screen.kind === 'qr' ? '二维码' : seconds ? '金句 · ' + seconds + ' 秒' : waving ? waveLabel : '待场';
   const greet = el('greet');
-  el('greet-label').textContent = waving ? waveLabel : 'Buddy 打招呼';
-  greet.disabled = !connected || publishing || screen.kind !== 'idle' || waving;
-  el('clear').disabled = !connected || publishing || (screen.kind === 'idle' && !waving);
+  el('greet-label').textContent = cancellingGreeting ? '正在回到待场' : waving ? waveLabel : preparing ? '准备打招呼…' : 'Buddy 打招呼';
+  greet.disabled = !connected || publishing || cancellingGreeting || preparing || screen.kind !== 'idle' || waving;
+  el('clear').disabled = !connected || cancellingGreeting || (publishing && publishing !== 'greet') ||
+    (screen.kind === 'idle' && !waving && !preparing);
   const ticks = [];
   if (remaining) ticks.push(remaining - (seconds - 1) * 1000);
   if (waving) ticks.push((now < cue.startsAt ? cue.startsAt : cue.startsAt + waveDuration) - now);
@@ -196,6 +231,7 @@ function updatePresence() {
       b.disabled = publishing || b.dataset.blocked === 'true';
     });
   updateQrButtons();
+  releasePreparedGreeting();
 }
 function updateRecording() {
   const local = mic.phase !== 'idle';
@@ -410,6 +446,7 @@ function snapshot(s) {
   asrReady = s.asrReady;
   modelReady = s.modelReady;
   online = s.online;
+  greetingReadyScreens = s.greetingReadyScreens ?? 0;
   displayed = s.displayed;
   ackVersion = s.ackVersion;
   acknowledgements = s.acknowledgements || [];
@@ -442,6 +479,7 @@ function event(m) {
   }
   if (m.type === 'screen' || m.type === 'presence') {
     online = m.online;
+    greetingReadyScreens = m.greetingReadyScreens ?? 0;
     displayed = m.displayed;
     ackVersion = m.ackVersion;
     acknowledgements = m.acknowledgements || [];
@@ -845,6 +883,7 @@ function count() {
 }
 async function publish(data) {
   if (publishing) return;
+  discardPreparedGreeting();
   let text = data.text;
   const item = data.kind === 'history' && history.find((past) => past.version === data.version);
   if (data.kind === 'candidate' && text === undefined) text = rows.get(data.id)?.quote;
@@ -855,7 +894,7 @@ async function publish(data) {
   }
   const signature = JSON.stringify(data);
   if (pendingSend?.signature !== signature) pendingSend = { signature, op: op() };
-  publishing = true;
+  publishing = data.kind;
   el('manual-send').disabled = true;
   updatePresence();
   try {
@@ -888,8 +927,32 @@ el('quote').onkeydown = (e) => {
     el('compose-form').requestSubmit();
   }
 };
-el('greet').onclick = () => publish({ kind: 'greet', currentVersion: screen.version });
-el('clear').onclick = () => publish({ kind: 'idle' });
+el('greet').onclick = requestGreeting;
+el('greet').onkeydown = event => {
+  if (event.repeat && (event.key === 'Enter' || event.key === ' ')) event.preventDefault();
+};
+el('clear').onclick = async () => {
+  if (preparedGreeting !== undefined) {
+    discardPreparedGreeting();
+    updateShowLabel();
+    return;
+  }
+  const target = publishing === 'greet' ? pendingSend?.op :
+    screen.kind === 'idle' && waveActive(screen.buddyCue, serverNow()) && screen.buddyCue.op;
+  if (!target) return publish({ kind: 'idle' });
+  if (cancellingGreeting) return;
+  cancellingGreeting = true;
+  updateShowLabel();
+  try {
+    const state = await api('publish', 'POST', { kind: 'cancel-greet', greetingOp: target, op: op() });
+    setScreen(state.screen, state.history, state.qrRevision);
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    cancellingGreeting = false;
+    updateShowLabel();
+  }
+};
 el('undo-screen').onclick = () => replay(history.find(replayable));
 el('history').ontoggle = renderHistory;
 el('show-saved').onclick = () => publish({ kind: 'qr', qrRevision });

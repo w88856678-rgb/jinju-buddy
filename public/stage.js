@@ -27,7 +27,10 @@ async function render(message) {
   }
 }
 const live = connect('stage', (m) => { if (m.type === 'screen') render(m); },
-  (online) => { status.textContent = online ? '实时连线' : '正在重连'; });
+  (online) => {
+    status.textContent = online ? '实时连线' : '正在重连';
+    if (online) scene.greetingReady.then(() => live.send({ type: 'greeting-ready' }));
+  });
 api('stage').then(render).catch(() => {});
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) live.send({ type: 'hidden' });
