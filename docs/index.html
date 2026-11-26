@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#19372d">
+  <meta name="referrer" content="no-referrer">
+  <title>金句 Buddy · 公网体验</title>
+  <link rel="icon" href="./assets/red-flower.png" type="image/png">
+  <link rel="stylesheet" href="./site.css">
+  <script src="./site.js" type="module"></script>
+</head>
+<body>
+  <header><div class="brand"><img src="./assets/red-flower.png" alt="" width="42" height="42"><span>金句 Buddy</span></div></header>
+  <main>
+    <h1>现场金句体验</h1>
+    <p>在控台收音、选句、发送。用手机或另一台电脑打开观众屏，就能看到同一句金句。</p>
+    <nav aria-label="体验入口">
+      <a class="button primary" href="?view=control">进入体验控台 <span aria-hidden="true">↗</span></a>
+      <a class="button" href="?view=stage">打开观众屏 <span aria-hidden="true">↗</span></a>
+    </nav>
+    <p class="note">观众直接进入，控台使用邀请人提供的体验口令。</p>
+    <p id="status" role="status" hidden></p>
+    <button id="retry" type="button" hidden>重新连接</button>
+    <figure><video controls muted loop playsinline preload="metadata" poster="./assets/stage-poster.png" aria-label="Buddy 倾听、递花和金句上滚的十秒实录"><source src="./assets/buddy-stage.mp4" type="video/mp4"></video><figcaption>观众屏实录 · 10 秒</figcaption></figure>
+  </main>
+</body>
+</html>

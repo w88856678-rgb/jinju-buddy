@@ -1,0 +1,239 @@
+@font-face {
+  font-family: 'Buddy Tencent';
+  src:
+    local('TencentSans W3'),
+    local('TencentSans-W3'),
+    url('/fonts/TencentSans-W3.otf') format('opentype');
+  font-weight: 100 550;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Buddy Tencent';
+  src:
+    local('TencentSans W7'),
+    local('TencentSans-W7'),
+    url('/fonts/TencentSans-W7.otf') format('opentype');
+  font-weight: 600 900;
+  font-display: swap;
+}
+:root {
+  --ink: #19372d;
+  --muted: #52675c;
+  --paper: #f4f4ed;
+  --panel: #fffefa;
+  --edge: #cdd5ca;
+  --evergreen: #184a39;
+  --sage: #e5ede0;
+  --red: #af3726;
+  font-family: 'Buddy Tencent', '腾讯体', 'PingFang SC', sans-serif;
+  color: var(--ink);
+  color-scheme: light;
+  font-synthesis: none;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+body,
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+button,
+a,
+summary {
+  touch-action: manipulation;
+}
+button {
+  border: 0;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+}
+a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+button,
+a,
+input,
+textarea,
+select,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+:focus-visible {
+  outline: 3px solid #bd5a2d;
+  outline-offset: 3px;
+}
+[hidden] {
+  display: none !important;
+}
+::selection {
+  background: #cce0ba;
+  color: #183627;
+}
+[data-icon] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  font-style: normal;
+}
+[data-icon] svg {
+  width: 1.18em;
+  height: 1.18em;
+  display: block;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  gap: 9px;
+  white-space: nowrap;
+}
+.brand b {
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+.brand-logo {
+  display: block;
+  flex: none;
+  width: 36px;
+  height: auto;
+}
+.event-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #af7735;
+  flex: none;
+}
+.status-dot.online {
+  background: #40835a;
+}
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  height: 38px;
+  width: 38px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+.icon-button:hover {
+  background: var(--sage);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Use native LED coordinates for the source and scale the same frame in the monitor. */
+.scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 1;
+  overflow: hidden;
+  isolation: isolate;
+  color: var(--led-ink, #10243a);
+  background: var(--led-background, transparent);
+}
+[data-look='blue'] { --led-background: #bce0f8; }
+[data-look='dark'] { --led-background: #10243a; --led-ink: #f5f8fc; }
+[data-look='overlay-light'] { --led-ink: #f5f8fc; }
+.led-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 512px;
+  height: 128px;
+  transform-origin: top left;
+  transform: scale(var(--led-scale, 1));
+  font-family: 'Buddy Tencent', '腾讯体', 'PingFang SC', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0;
+  font-kerning: none;
+  text-spacing-trim: space-all;
+  text-autospace: no-autospace;
+}
+.led-buddy, .led-quote-track, .led-qr { display: none; position: absolute; }
+.scene[data-kind='idle'] .led-buddy,
+.scene[data-kind='quote'] .led-buddy,
+.scene[data-kind='quote'] .led-quote-track { display: block; }
+.led-buddy {
+  /* The film includes transparent gutters. Its visible motion stays in the 92 px Buddy column. */
+  left: 10px;
+  top: 22px;
+  width: 95px;
+  height: 86px;
+  overflow: hidden;
+  background: url('/static/assets/buddy-film-poster.webp') center / 100% 100% no-repeat;
+}
+.led-buddy[data-ready] { background-image: none; }
+.led-buddy img { display: block; width: 1000%; height: 1000%; max-width: none; visibility: hidden; }
+.led-buddy[data-ready] img { visibility: visible; }
+.scene[data-kind='qr'] .led-qr { display: flex; }
+.led-quote-track {
+  left: 116px;
+  top: 0;
+  width: 384px;
+  height: 128px;
+}
+.led-quote, .led-quote-outgoing {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  white-space: pre;
+}
+.led-quote-outgoing { inset: -100% 0 100%; }
+.led-quote span, .led-quote-outgoing span { display: block; }
+.led-qr {
+  left: 96px;
+  top: 6px;
+  height: 116px;
+  align-items: center;
+  gap: 24px;
+  font-size: 36px;
+  line-height: 46px;
+  white-space: nowrap;
+}
+.led-code, .led-code canvas {
+  display: block;
+  width: 116px;
+  height: 116px;
+  background: white;
+  image-rendering: pixelated;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}

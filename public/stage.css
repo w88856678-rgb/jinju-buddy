@@ -1,0 +1,11 @@
+html, .stage-page { background: transparent; overflow: hidden; }
+.stage-main {
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  display: grid;
+  place-items: center;
+}
+.stage-main > .scene { width: min(100vw, 400svh); }
+.stage-page[data-native] .stage-main { place-items: start; }
+.stage-page[data-native] .scene { width: 512px; }

@@ -1,0 +1,23 @@
+{
+  "name": "jinju-buddy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.16"
+  },
+  "scripts": {
+    "start": "node server/main.js",
+    "test": "node --test test/*.test.js",
+    "test:browser": "node test/browser.js && node test/editor-browser.js"
+  },
+  "dependencies": {
+    "fontkit": "2.0.4",
+    "jsqr": "^1.4.0",
+    "sharp": "^0.34.5",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.1"
+  }
+}

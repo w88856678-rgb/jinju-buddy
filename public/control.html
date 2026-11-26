@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#19372d" />
+    <title>现场控台 · 金句buddy</title>
+    <link rel="icon" type="image/png" href="/static/assets/red-flower.png" />
+    <link rel="stylesheet" href="/static/base.css" />
+    <link rel="stylesheet" href="/static/control.css" />
+    <script type="module" src="/static/control.js"></script>
+  </head>
+  <body class="console">
+    <header class="mast">
+      <div class="wrap mast-inner">
+        <a class="brand" href="./control" aria-label="金句buddy 控台"
+          ><img class="brand-logo" src="/static/assets/red-flower.png" alt="" width="200" height="202" /><b
+            >金句buddy</b
+          ></a
+        >
+        <span class="event-label" data-event>S大会</span>
+        <a id="open-stage" class="button top-open" href="./stage" target="_blank" rel="noopener"
+          ><i data-icon="screen"></i>打开大屏<i data-icon="external"></i
+        ></a>
+      </div>
+    </header>
+    <section id="login" class="login panel" hidden>
+      <img src="/static/assets/buddy-rest.webp" alt="" width="90" height="90" />
+      <h1>进入活动控台</h1>
+      <form id="login-form">
+        <label for="pass">本场控台口令</label
+        ><input id="pass" type="password" autocomplete="current-password" required /><button
+          class="button primary"
+          type="submit"
+        >
+          进入控台
+        </button>
+        <p id="login-error" role="alert"></p>
+      </form>
+    </section>
+    <main class="wrap" id="workspace" hidden>
+      <div class="heading">
+        <h1>现场控台</h1>
+        <nav class="jump-links" aria-label="控台快捷入口">
+          <a class="mobile-jump" href="#compose"><i data-icon="pen"></i>手写</a
+          ><a class="mobile-jump" href="#source-section"><i data-icon="wave"></i>发言</a
+          ><a class="mobile-jump" href="#monitor"><i data-icon="screen"></i>监看</a
+          ><a href="#records" id="jump-records"><i data-icon="notes"></i>逐字稿</a
+          ><a href="#qr-section"
+            ><i data-icon="qr"></i><span><span class="jump-full">总结</span>二维码</span></a
+          >
+        </nav>
+        <a class="connection" href="#monitor" title="查看投影回执"
+          ><span class="status-dot" id="connection-dot"></span><span id="connection">正在连接控台</span
+          ><i data-icon="down"></i
+        ></a>
+      </div>
+      <div class="workspace-grid">
+        <div class="stack desk-column">
+          <section class="panel agent" id="source-section" aria-labelledby="agent-title" tabindex="-1">
+            <div class="section-heading">
+              <i data-icon="wave"></i>
+              <h2 id="agent-title">现场发言</h2>
+              <span id="record-status" class="status-word" role="status">未收音</span>
+            </div>
+            <div class="speech-toolbar">
+              <label class="mode-field"><span>发言场景</span><select id="speech-mode">
+                <option value="debate">自由辩</option><option value="speech">嘉宾演讲</option>
+              </select></label>
+              <div class="agent-actions">
+              <button id="record" class="button record-button">
+                <i id="record-play" data-icon="play" aria-hidden="true"></i>
+                <i id="record-pause" data-icon="pause" aria-hidden="true" hidden></i>
+                <span id="record-label">开始收音</span></button
+              ><button
+                id="paste-open"
+                class="button outline"
+                aria-controls="paste-form"
+                aria-expanded="false"
+              >
+                <i data-icon="paste"></i>粘贴发言
+              </button>
+            </div>
+              </div>
+            <details id="audio-settings" class="audio-settings">
+              <summary><i data-icon="wave"></i>收音设置<span id="input-summary"></span><i data-icon="down"></i></summary>
+              <div class="audio-fields">
+                <label>输入设备<select id="device"><option value="">系统默认麦克风</option></select></label>
+              </div>
+              <p class="quiet">腾讯云 V2 识别发言人，编号随逐字稿导出。</p>
+            </details>
+            <div id="signal" class="signal" hidden>
+              <meter id="level" min="-72" max="0" value="-72" aria-label="麦克风音量"></meter>
+              <span id="level-label"></span><span id="capture-metrics"></span>
+            </div>
+            <p class="service-note" id="asr-note" hidden></p>
+            <form id="paste-form" class="inset" hidden>
+              <label for="source">发言原文</label
+              ><textarea
+                id="source"
+                rows="3"
+                placeholder="粘贴一段完整发言，交给 Hy4 Flash 提炼"
+                maxlength="4000"
+                required
+              ></textarea>
+              <div class="inset-foot">
+                <select id="paste-speaker" aria-label="接续发言原文">
+                  <option value="">单独提炼</option></select
+                ><button class="button solid small" type="submit">提炼候选</button>
+              </div>
+            </form>
+            <div class="live-columns">
+              <section class="speech-pane" aria-labelledby="live-title">
+                <header class="pane-head">
+                  <h3 id="live-title"><i data-icon="wave"></i>实时逐字稿</h3>
+                  <div class="live-actions">
+                    <span id="live-state" hidden>正在识别</span>
+                    <button id="extract-selection" type="button" class="text-button" disabled title="选中已定稿的发言后提炼">提炼所选</button>
+                    <button id="clear-live" type="button" class="text-button" aria-label="清空实时逐字稿"
+                      aria-haspopup="dialog" aria-controls="clear-live-dialog" disabled>清空</button>
+                  </div>
+                </header>
+                <textarea id="live-text" class="live-text" rows="9" readonly spellcheck="false"
+                  aria-labelledby="live-title" placeholder="开始收音后，这里会连续显示发言原文。"></textarea>
+              </section>
+              <section class="quotes-pane" aria-labelledby="live-quotes-title">
+                <header class="pane-head"><h3 id="live-quotes-title"><i data-icon="notes"></i>候选金句 <span id="candidate-count">0</span></h3><span>点选上屏</span></header>
+                <div id="job-status" class="job" role="status" hidden>
+                  <span id="job-message"></span><button id="retry" class="text-button" hidden>重新提炼</button>
+                </div>
+                <div id="candidates"></div>
+                <button id="more-quotes" type="button" class="text-button" hidden>查看更早候选</button>
+                <div id="empty-candidates" class="empty">
+                  <img alt="" src="/static/assets/buddy-small.webp" />
+                  <p id="empty-reason">有完整观点后，候选会出现在这里。</p>
+                </div>
+              </section>
+            </div>
+            <details class="records" id="records">
+              <summary>
+                <i data-icon="notes"></i>逐字稿校订与导出<span id="segment-count">0 段</span
+                ><i data-icon="down"></i>
+              </summary>
+              <div id="speaker-map"></div>
+              <div class="transcript-head">
+                <span class="quiet">发言定稿</span
+                ><a class="text-button" id="download" href="./api/transcript" download
+                  ><i data-icon="download"></i>下载 TXT</a
+                >
+              </div>
+              <div id="transcript"></div>
+            </details>
+          </section>
+          <section class="panel compose" id="compose" aria-labelledby="compose-title" tabindex="-1">
+            <div class="section-heading">
+              <i data-icon="pen"></i>
+              <h2 id="compose-title"><label for="quote">手写金句</label></h2>
+              <span class="count" id="quote-count">0 / 320</span>
+            </div>
+            <form id="compose-form">
+              <textarea
+                id="quote"
+                class="quote-input"
+                aria-label="金句输入"
+                aria-describedby="quote-count length-hint"
+                placeholder="写下准备上屏的一句话…"
+                rows="2"
+                required
+              ></textarea>
+              <div class="layout-tools" id="manual-layout" hidden><div class="reading-preview"></div>
+                <label class="compact-option" hidden><input type="checkbox" id="manual-compact">允许紧凑字号，最低 29 px</label></div>
+              <p id="length-hint" class="service-note" hidden>超出 LED 两行，请精简或分两次发送。</p>
+              <div class="actions">
+                <span class="keyboard"
+                  ><kbd id="shortcut">Ctrl</kbd><span>+</span><kbd>Enter</kbd><span>发送</span></span
+                ><button class="button primary" id="manual-send" type="submit">
+                  <i data-icon="send"></i>发送到大屏
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+        <aside class="stack monitor-column">
+          <section class="panel preview-panel" id="monitor" aria-labelledby="monitor-title" tabindex="-1">
+            <div class="section-heading">
+              <i data-icon="screen"></i>
+              <h2 id="monitor-title">LED 监看</h2>
+              <span id="on-air" class="preview-state">待场</span>
+            </div>
+            <div class="monitor-frame">
+              <div id="preview" data-look="dark" aria-label="本次发布画面，画幅 4 比 1"></div>
+              <div class="receipt" id="receipt" role="status">
+                <div class="receipt-title">
+                  <span class="status-dot" id="screen-dot"></span
+                  ><strong id="screen-status">等待大屏连接</strong>
+                </div>
+                <span id="receipt-count"></span>
+              </div>
+            </div>
+            <p id="led-error" class="review-note" role="status" hidden></p>
+            <p class="last-ack" id="last-ack" hidden></p>
+            <p class="review-note" id="screen-correction" role="status" hidden></p>
+            <div class="monitor-actions">
+              <button class="text-button" id="undo-screen" type="button" disabled>
+                <i data-icon="undo"></i>恢复上一屏</button
+              ><button class="text-button" id="clear" type="button">回到待场</button>
+            </div>
+            <details class="history" id="history">
+              <summary>
+                <i data-icon="clock"></i>上屏记录<span id="published-time"></span><i data-icon="down"></i>
+              </summary>
+              <div id="history-list"></div>
+            </details>
+            <label class="output-look" for="stage-look">大屏链接样式
+              <select id="stage-look">
+                <option value="dark">深色底 · 近白字</option>
+                <option value="overlay-light">透明叠加 · 近白字</option>
+                <option value="blue">现场浅蓝底 · 深墨字</option>
+                <option value="overlay">透明叠加 · 深墨字</option>
+              </select>
+            </label>
+            <div class="share-line">
+              <label for="copy-url">投影地址</label
+              ><a id="stage-url" href="./stage" target="_blank" rel="noopener">大屏地址</a
+              ><button id="copy-url" class="icon-button" aria-label="复制大屏地址" title="复制大屏地址">
+                <i data-icon="copy"></i>
+              </button>
+            </div>
+          </section>
+          <section class="panel qr-panel" id="qr-section" aria-labelledby="qr-title" tabindex="-1">
+            <div class="section-heading">
+              <i data-icon="qr"></i>
+              <h2 id="qr-title">总结二维码</h2>
+            </div>
+            <label class="file-zone" id="file-zone" for="qr-file"
+              ><span id="qr-placeholder" class="file-symbol"><i data-icon="upload"></i></span
+              ><img id="qr-preview" alt="二维码缩略图" hidden /><span class="file-text"
+                ><strong id="file-title">选择或拖入二维码</strong
+                ><small id="file-detail">PNG 或 JPG，最大 8 MB</small></span
+              ><i class="file-arrow" data-icon="plus"></i
+              ><input id="qr-file" type="file" accept="image/png,image/jpeg"
+            /></label>
+            <p class="qr-target" id="qr-target" role="status" hidden></p>
+            <div class="qr-actions">
+              <button class="text-button" id="cancel-file" type="button" hidden>取消选图</button
+              ><button class="text-button remove-qr" id="remove-qr" type="button" hidden>
+                删除当前二维码</button
+              ><button class="text-button" id="restore-qr" type="button" hidden>撤销删除</button
+              ><button class="button outline" id="show-saved" type="button" hidden>展示已存二维码</button
+              ><button class="button solid" id="upload" type="button" hidden disabled>上传并展示</button>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </main>
+    <dialog id="source-review" aria-labelledby="review-title">
+      <h3 id="review-title">核对发言归属</h3>
+      <p id="review-reason"></p><blockquote id="review-source"></blockquote>
+      <div class="dialog-actions"><button type="button" id="review-cancel" class="button">返回</button>
+        <button type="button" id="review-confirm" class="button solid">已核对归属</button></div>
+    </dialog>
+    <dialog id="clear-live-dialog" aria-labelledby="clear-live-title" aria-describedby="clear-live-detail">
+      <h3 id="clear-live-title">清空实时逐字稿？</h3>
+      <p id="clear-live-detail">本场所有控台的实时文本框将从下一段发言开始显示。完整记录仍可在「逐字稿校订与导出」中查看。</p>
+      <div class="dialog-actions">
+        <button id="cancel-clear-live" type="button" class="button outline" autofocus>取消</button>
+        <button id="confirm-clear-live" type="button" class="button destructive">确认清空</button>
+      </div>
+    </dialog>
+    <dialog id="qr-dialog" aria-labelledby="qr-dialog-title" aria-describedby="qr-dialog-detail">
+      <h3 id="qr-dialog-title">删除当前二维码？</h3>
+      <p id="qr-dialog-detail"></p>
+      <div class="dialog-actions">
+        <button id="keep-qr" type="button" class="button outline" autofocus>取消</button
+        ><button id="confirm-remove" type="button" class="button destructive">确认删除</button>
+      </div>
+    </dialog>
+    <dialog id="edit-dialog" aria-labelledby="edit-title">
+      <form id="transcript-form">
+        <h3 id="edit-title">校订逐字稿</h3>
+        <details class="original">
+          <summary>查看识别原文</summary>
+          <p id="edit-original"></p>
+        </details>
+        <p class="quiet">保存后，取自这段原话的候选会重新提炼。</p><label for="edit-body">校订文字</label><textarea id="edit-body" rows="4" required></textarea>
+        <div class="edit-options">
+          <label><input type="checkbox" id="exclude-row" />从 TXT 导出中排除</label
+          ><button type="button" class="text-button" id="reset-edit">恢复原文</button>
+        </div>
+        <p id="edit-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button type="button" id="cancel-edit" class="button outline">取消</button
+          ><button type="submit" class="button solid">保存校订</button>
+        </div>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <noscript>请启用 JavaScript 使用现场控台。</noscript>
+  </body>
+</html>

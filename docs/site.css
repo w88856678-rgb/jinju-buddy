@@ -1,0 +1,21 @@
+:root { color-scheme: light; font-family: "TencentSans W3", "腾讯体", "PingFang SC", system-ui, sans-serif; color: #17372d; background: #f5f4ed; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+header { background: #19372d; color: #fffdf6; }
+.brand { width: min(100% - 40px, 950px); margin: auto; display: flex; align-items: center; gap: 12px; min-height: 66px; font-size: 22px; font-weight: 700; }
+.brand img { object-fit: contain; }
+main { width: min(100% - 40px, 800px); margin: clamp(40px, 8vh, 76px) auto; }
+h1 { font-family: "TencentSans W7", "腾讯体", "PingFang SC", system-ui, sans-serif; font-size: clamp(32px, 6vw, 52px); margin: 0 0 16px; line-height: 1.2; }
+p { font-size: 17px; line-height: 1.7; margin: 0; }
+nav { display: flex; flex-wrap: wrap; gap: 12px; margin: 26px 0 12px; }
+.button, #retry { font: inherit; font-weight: 650; text-decoration: none; padding: 11px 18px; border-radius: 7px; border: 1px solid #7b9385; background: #fffefa; color: #183e32; }
+.button.primary { background: #194e3d; color: white; border-color: #194e3d; }
+.button span { margin-left: .4em; }
+:focus-visible { outline: 3px solid #ba512c; outline-offset: 4px; }
+.note, figcaption { color: #53695d; font-size: 14px; }
+#status { margin-top: 14px; font-weight: 650; }
+#retry { margin-top: 10px; cursor: pointer; }
+figure { margin: 38px 0 0; }
+video { display: block; width: 100%; aspect-ratio: 4/1; background: #10243a; border-radius: 8px; }
+figcaption { margin-top: 8px; }
+@media(max-width: 390px) { main, .brand { width: calc(100% - 30px); } .button { padding: 10px 13px; } }
