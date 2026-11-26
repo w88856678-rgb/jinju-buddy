@@ -5,6 +5,29 @@ import { createHmac } from 'node:crypto';
 import { asrUrl } from '../server/asr.js';
 import { mockCloud, sentence, testApp, until, wire } from './support.js';
 
+test('十秒期限在重启后生效，旧句到期或重试不会清掉新句', async (t) => {
+  let app = await testApp();
+  t.after(() => app.cleanup());
+  const first = { kind: 'quote', op: 'expiry-first', text: '先听反馈' };
+  const sent = await (await app.call('publish', first)).json();
+  const fresh = await (await app.call('publish', { ...first, op: 'expiry-next', text: '再改流程' })).json();
+  assert.deepEqual(app.store.expireQuote(sent.screen.version), fresh.screen);
+  assert.deepEqual(app.store.expireQuote(fresh.screen.version), fresh.screen);
+  // An installation upgraded with a previously persistent quote has only publishedAt.
+  app.store.set('screen', { ...fresh.screen, publishedAt: Date.now() - 11000 });
+  const dir = app.dir;
+  await app.cleanup(true);
+  app = await testApp({ dir });
+  const idle = (await (await app.call('stage')).json()).screen;
+  assert.equal(idle.kind, 'idle');
+  assert.deepEqual((await (await app.call('publish', first)).json()).screen, idle);
+  const replay = await (await app.call('publish', {
+    kind: 'history', op: 'expiry-manual-replay', version: fresh.screen.version, currentVersion: idle.version,
+  })).json();
+  assert.equal(replay.screen.text, fresh.screen.text);
+  assert(replay.screen.publishedAt >= idle.publishedAt);
+});
+
 test('实时区清空保存在活动内，重试旧确认时保留新发言', async (t) => {
   let app = await testApp();
   t.after(() => app.cleanup());

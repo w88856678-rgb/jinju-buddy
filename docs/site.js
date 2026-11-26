@@ -26,7 +26,7 @@ async function openExperience() {
     if (view === 'stage') target.searchParams.set('look', 'dark');
     location.replace(target.href);
   } catch {
-    status.textContent = '实时服务暂时连接不上，可以重试，或先看下方的观众屏实录。';
+    status.textContent = '实时服务暂时连接不上，可以重试，或先看下方的观众屏样片。';
     retry.hidden = false;
   }
 }

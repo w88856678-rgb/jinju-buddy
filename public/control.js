@@ -1,4 +1,5 @@
-import { api, base, connect, decorate, imageUrl, op } from './ui.js';
+import { api, base, connect, decorate, imageUrl, op, serverNow } from './ui.js';
+import { quoteDeadline, waveActive, waveDuration } from './show-timing.js';
 import { LiveTranscript } from './live-transcript.js';
 import { clock, maxQuote, quoteText, roles } from './format.js';
 import { createScene } from './scene.js';
@@ -140,6 +141,25 @@ function receiptText() {
   if (shown < online) return '部分大屏已显示';
   return '大屏已显示';
 }
+let showLabelTimer;
+function updateShowLabel() {
+  clearTimeout(showLabelTimer);
+  const now = serverNow(), cue = screen.buddyCue;
+  const waving = waveActive(cue, now);
+  const remaining = screen.kind === 'quote' ? Math.max(0, quoteDeadline(screen) - now) : 0;
+  const seconds = Math.ceil(remaining / 1000);
+  const waveLabel = waving && now < cue.startsAt ? '准备挥手' : '招呼中';
+  el('on-air').textContent = screen.kind === 'qr' ? '二维码' : seconds ? '金句 · ' + seconds + ' 秒' : waving ? waveLabel : '待场';
+  const greet = el('greet');
+  greet.textContent = waving ? waveLabel : 'Buddy 打招呼';
+  greet.disabled = !connected || publishing || screen.kind !== 'idle' || waving;
+  el('clear').disabled = publishing || (screen.kind === 'idle' && !waving);
+  const ticks = [];
+  if (remaining) ticks.push(remaining - (seconds - 1) * 1000);
+  if (waving) ticks.push((now < cue.startsAt ? cue.startsAt : cue.startsAt + waveDuration) - now);
+  if (ticks.length) showLabelTimer = setTimeout(updateShowLabel, Math.ceil(Math.min(...ticks)) + 1);
+}
+window.addEventListener('buddy-clock', updateShowLabel);
 function updatePresence() {
   const top = !connected
     ? '控台重连中'
@@ -168,7 +188,7 @@ function updatePresence() {
   correctionNote.hidden = !current?.correctedBy;
   correctionNote.textContent = current?.confirmedCorrection
     ? '发言人已更正大屏上的原话，请核对并手动换屏。' : '大屏原话可能有改口，正在等定稿。';
-  el('clear').disabled = screen.kind === 'idle' || publishing;
+  updateShowLabel();
   for (const item of cards.values()) item.sync();
   el('history-list')
     .querySelectorAll('button')
@@ -223,7 +243,6 @@ function setScreen(next, previous, revision) {
     renderHistory();
   }
   el('published-time').textContent = timeOf(next.publishedAt);
-  el('on-air').textContent = { idle: '待场', quote: '金句', qr: '二维码' }[next.kind];
   preview.show(next).then((drawn) => {
     if (drawn && next.version === screen.version) el('led-error').hidden = true;
   }).catch((error) => {
@@ -869,6 +888,7 @@ el('quote').onkeydown = (e) => {
     el('compose-form').requestSubmit();
   }
 };
+el('greet').onclick = () => publish({ kind: 'greet', currentVersion: screen.version });
 el('clear').onclick = () => publish({ kind: 'idle' });
 el('undo-screen').onclick = () => replay(history.find(replayable));
 el('history').ontoggle = renderHistory;

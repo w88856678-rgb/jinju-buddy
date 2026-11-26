@@ -183,17 +183,17 @@ summary {
 .scene[data-kind='quote'] .led-buddy,
 .scene[data-kind='quote'] .led-quote-track { display: block; }
 .led-buddy {
-  /* The film includes transparent gutters. Its visible motion stays in the 92 px Buddy column. */
-  left: 10px;
-  top: 22px;
-  width: 95px;
-  height: 86px;
+  left: 0;
+  top: 4px;
+  width: 108px;
+  height: 108px;
   overflow: hidden;
-  background: url('/static/assets/buddy-film-poster.webp') center / 100% 100% no-repeat;
+  background: url('/static/assets/buddy-play-poster.webp') center / contain no-repeat;
 }
 .led-buddy[data-ready] { background-image: none; }
-.led-buddy img { display: block; width: 1000%; height: 1000%; max-width: none; visibility: hidden; }
-.led-buddy[data-ready] img { visibility: visible; }
+.led-buddy canvas { display: block; width: 100%; height: 100%; visibility: hidden; }
+.led-buddy[data-ready] canvas { visibility: visible; }
+.led-words { position: absolute; inset: 0; pointer-events: none; }
 .scene[data-kind='qr'] .led-qr { display: flex; }
 .led-quote-track {
   left: 116px;

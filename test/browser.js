@@ -67,12 +67,10 @@ try {
   await stage.goto(stageAddress.href);
   await stage.locator('.scene[data-kind="idle"]').waitFor();
   await control.getByText('大屏已连接', { exact: true }).waitFor();
-  const motion = stage.locator('.led-buddy img');
+  const motion = stage.locator('.led-buddy canvas');
   const waitForMotion = (page, state) => page.locator('.led-buddy[data-motion="' + state + '"]').waitFor();
-  await until(() => motion.evaluate((img) =>
-    img.complete && img.naturalWidth > 0 && img.currentSrc.endsWith('/buddy-film-4x.webp')));
-  await waitForMotion(stage, 'listening');
-  await waitForMotion(control, 'listening');
+  await waitForMotion(stage, 'play');
+  await waitForMotion(control, 'play');
   await stage.keyboard.press('f');
   assert.ok(await stage.evaluate(() => Boolean(document.fullscreenElement)));
   await stage.mouse.move(0, 0);
@@ -97,14 +95,12 @@ try {
   assert(await control.locator('#manual-send').isDisabled());
   assert.equal(await control.locator('#quote-count').textContent(), '0 / 320');
   await write('「第一句，测试金句！」', '第一句测试金句');
-  await waitForMotion(stage, 'reveal');
-  await waitForMotion(control, 'reveal');
-  await waitForMotion(stage, 'listening');
+  await waitForMotion(stage, 'play');
+  await waitForMotion(control, 'play');
   assert.equal(await stage.locator('.led-quote').textContent(), '第一句测试金句');
   // An intentional resend is a new publication even when the visible words match.
   await write('第一句测试金句');
-  await waitForMotion(stage, 'reveal');
-  await waitForMotion(stage, 'listening');
+  await waitForMotion(stage, 'play');
   // Hold a real roll midway so two rapid publications exercise the same incoming slot.
   const track = stage.locator('.led-quote-track');
   await track.evaluate((n) => {
@@ -150,7 +146,7 @@ try {
   );
   await stage.reload();
   await waitForQuote('第三句测试金句');
-  await waitForMotion(stage, 'reveal');
+  await waitForMotion(stage, 'play');
   const long = '观点要保留成立的条件和适用的范围。'.repeat(18);
   await control.locator('#quote').fill(long);
   assert(await control.locator('#manual-send').isDisabled());

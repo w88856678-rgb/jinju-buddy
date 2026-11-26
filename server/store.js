@@ -7,6 +7,7 @@ import { EditorCards } from './editor-cards.js';
 import { incompleteCard } from './quote-integrity.js';
 import { candidateLayout } from './quote-fit.js';
 import { correctionTargets, isCorrection } from './speech-cues.js';
+import { planWave, quoteDeadline, waveActive } from '../public/show-timing.js';
 
 const selectSegment = `SELECT s.rowid AS sequence, s.id, s.speaker, s.startMs, s.endMs, s.body, s.rev, s.quote, s.problem, s.overrideRole,
   tim.finalAt, tim.startedAt, tim.modelMs, tim.verifyMs, tim.finishedAt, c.later AS correctedBy, c.confirmed AS confirmedCorrection,
@@ -105,6 +106,27 @@ export class Store {
   screen() {
     return displayScreen(this.get('screen', { kind: 'idle', version: 0 }));
   }
+  greet(op, expectedVersion) {
+    return this.once(op, () => {
+      const screen = this.screen(), now = Date.now();
+      const previous = this.get('buddyCue');
+      if (screen.kind !== 'idle')
+        throw Object.assign(new Error('请在待场时打招呼。'), { status: 409 });
+      if (waveActive(previous, now)) return;
+      if (expectedVersion !== screen.version)
+        throw Object.assign(new Error('画面已切换，请核对当前监看。'), { status: 409 });
+      this.set('buddyCue', planWave(previous, now));
+      this.set('screen', { ...screen, version: screen.version + 1, publishedAt: now });
+    });
+  }
+  expireQuote(version) {
+    return this.transaction(() => {
+      const screen = this.screen();
+      if (screen.kind === 'quote' && screen.version === version && quoteDeadline(screen) <= Date.now())
+        this.saveScreen({ kind: 'idle' });
+      return this.screen();
+    });
+  }
   transaction(change) {
     this.db.exec('BEGIN IMMEDIATE');
     try {
@@ -137,6 +159,8 @@ export class Store {
       throw Object.assign(new Error('二维码已在其他操作中更新，请核对后重试'), { status: 409 });
   }
   saveScreen(content) {
+    if (content.kind !== 'quote' && waveActive(this.get('buddyCue'), Date.now()))
+      this.set('buddyCue', { playOrigin: Date.now() });
     if (content.kind === 'quote') {
       const text = quoteText(content.text);
       if (!text || [...text].length > maxQuote)

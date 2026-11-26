@@ -106,7 +106,7 @@ try {
   // A missing film atlas must still leave a readable, acknowledged frame on a fresh stage.
   const fallback = await browser.newPage({viewport:{width:512,height:128}});
   let atlasRequests = 0;
-  await fallback.route('**/buddy-film-*x.webp', route => {
+  await fallback.route(/\/buddy-(?:play|wave)-\d+\.webp$/, route => {
     atlasRequests++;
     return route.abort('failed');
   });
@@ -114,7 +114,7 @@ try {
   await until(async () => (await (await app.call('control')).json()).displayed === 2);
   assert(atlasRequests > 0);
   assert.equal(await fallback.locator('.led-buddy').getAttribute('data-motion'), 'still');
-  assert.match(await fallback.locator('.led-buddy').evaluate(n => getComputedStyle(n).backgroundImage), /buddy-film-poster/);
+  assert.match(await fallback.locator('.led-buddy').evaluate(n => getComputedStyle(n).backgroundImage), /buddy-play-poster/);
   assert.deepEqual(await fallback.locator('.led-quote span').allTextContents(), compactText.split('\n'));
   assert.equal(await fallback.locator('.led-quote').evaluate(n => getComputedStyle(n).fontSize), '29px');
   await fallback.close();

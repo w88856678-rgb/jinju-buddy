@@ -16,6 +16,7 @@ import { QuoteQueue, extractQuote, extractQuoteBatch } from './quotes.js';
 import { bridgeAudio } from './asr.js';
 import { demoAllowance } from './public-demo.js';
 import { quoteText, roles } from '../public/format.js';
+import { quoteDeadline } from '../public/show-timing.js';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const controlRow = row => row.quote ? { ...row, quote:quoteText(row.quote), draftText:row.quote, layout:candidateLayout(row.quote),
@@ -210,17 +211,40 @@ export function createApp(options = {}) {
     audio = state;
     privateEvent({ type: 'audio', audio });
   };
+  let expiryTimer;
+  function presentation(screen = store.screen()) {
+    const cue = store.get('buddyCue');
+    return cue ? { ...screen, buddyCue: cue } : screen;
+  }
   function stageState(screen = store.screen()) {
     const { candidate, ...published } = screen;
-    return { name: cfg.name, screen: published };
+    return { name: cfg.name, screen: presentation(published), serverNow: Date.now() };
+  }
+  function scheduleExpiry(screen) {
+    clearTimeout(expiryTimer);
+    if (screen.kind !== 'quote') return;
+    const expire = () => {
+      const active = store.screen();
+      if (active.version !== screen.version || active.kind !== 'quote') return;
+      if (quoteDeadline(active) > Date.now()) return scheduleExpiry(active);
+      updateDisplay(() => store.expireQuote(active.version));
+    };
+    const remaining = quoteDeadline(screen) - Date.now();
+    if (remaining <= 0) expire();
+    else {
+      expiryTimer = setTimeout(expire, remaining);
+      expiryTimer.unref();
+    }
   }
   function updateDisplay(change) {
     const previous = store.screen().version;
     const screen = change();
-    if (screen.version !== previous)
+    if (screen.version !== previous) {
+      scheduleExpiry(screen);
       for (const ws of stages.keys()) sendWs(ws, { type: 'screen', ...stageState(screen) });
-    const state = { screen, history: store.history(), ...store.qrState() };
-    privateEvent({ type: 'screen', ...state, ...presence() });
+    }
+    const state = { screen: presentation(screen), history: store.history(), ...store.qrState() };
+    privateEvent({ type: 'screen', ...state, ...presence(), serverNow: Date.now() });
     return state;
   }
   function snapshot() {
@@ -228,7 +252,8 @@ export function createApp(options = {}) {
     return {
       name: cfg.name,
       publicDemo,
-      screen: store.screen(),
+      screen: presentation(),
+      serverNow: Date.now(),
       history: store.history(),
       ...store.qrState(),
       rows: store.segments().map(controlRow),
@@ -272,6 +297,7 @@ export function createApp(options = {}) {
     }
     if (!path.startsWith(base + '/')) throw fail(404, '没有找到这场活动');
     const route = path.slice(base.length);
+    if (get && route === '/api/time') return json(res, { serverNow: Date.now() });
     if (get && ['/control', '/stage'].includes(route))
       return staticFile(res, join(publicDir, route.slice(1) + '.html'));
     if (get && route === '/api/stage') return json(res, stageState());
@@ -349,6 +375,7 @@ export function createApp(options = {}) {
     }
     if (route === '/api/publish') {
       const op = opId(data.op);
+      if (data.kind === 'greet') return json(res, updateDisplay(() => store.greet(op, data.currentVersion)));
       if (data.kind === 'history') {
         const item = store.history().find((s) => s.version === data.version);
         if (item?.kind === 'qr') await qrTarget(item.image);
@@ -565,6 +592,7 @@ export function createApp(options = {}) {
     }
   }, 15000);
   heartbeat.unref();
+  scheduleExpiry(store.screen());
   queue.recover();
   return {
     server,
@@ -572,6 +600,7 @@ export function createApp(options = {}) {
     base,
     stop: async () => {
       shuttingDown = true;
+      clearTimeout(expiryTimer);
       clearInterval(heartbeat);
       endAudio?.();
       for (const ws of wss.clients) ws.terminate();

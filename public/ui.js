@@ -1,4 +1,17 @@
 export const base = location.pathname.replace(/\/(control|stage)\/?$/, '');
+let clockOffset, bestTrip = Infinity, calibratedAt = -Infinity;
+export const serverNow = () => clockOffset === undefined ? Date.now() : performance.now() + clockOffset;
+function syncClock(timestamp, sent) {
+  if (!Number.isFinite(timestamp)) return;
+  const received = performance.now();
+  const trip = sent === undefined ? Infinity : received - sent;
+  if (clockOffset !== undefined && (sent === undefined || (trip > bestTrip && received - calibratedAt < 60000))) return;
+  const before = serverNow();
+  clockOffset = timestamp - received + (Number.isFinite(trip) ? trip / 2 : 0);
+  bestTrip = trip;
+  calibratedAt = received;
+  if (Math.abs(before - serverNow()) > 15) window.dispatchEvent(new Event('buddy-clock'));
+}
 const paths = {
   screen: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/>',
   external: '<path d="M7 17 18 6M9 6h9v9"/>',
@@ -37,6 +50,7 @@ export async function api(path, method = 'GET', data) {
     options.headers = { 'Content-Type': 'application/json' };
     options.body = JSON.stringify(data);
   }
+  const sent = performance.now();
   const r = await fetch(base + '/api/' + path, options);
   let result;
   try {
@@ -45,6 +59,7 @@ export async function api(path, method = 'GET', data) {
     throw new Error('后台连接中断，请稍后重试');
   }
   if (!r.ok) throw Object.assign(new Error(result.error), { status: r.status });
+  syncClock(result.serverNow, sent);
   return result;
 }
 export function socketUrl(role) {
@@ -64,10 +79,13 @@ export function connect(role, onMessage, onStatus) {
     ws.onopen = () => {
       delay = 400;
       onStatus(true);
+      api('time').catch(() => {});
     };
     ws.onmessage = (e) => {
       try {
-        onMessage(JSON.parse(e.data));
+        const message = JSON.parse(e.data);
+        syncClock(message.serverNow);
+        onMessage(message);
       } catch (error) {
         console.error('无法更新显示', error.name);
       }

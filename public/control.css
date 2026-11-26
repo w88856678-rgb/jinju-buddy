@@ -629,6 +629,7 @@ select {
 }
 .monitor-actions {
   justify-content: space-between;
+  flex-wrap: wrap;
   margin: 5px -7px 4px;
 }
 .history > summary {

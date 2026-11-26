@@ -1,106 +1,95 @@
-// The 25 fps film is packed into a ten-by-ten grid of transparent cells.
-const frameMs = 40;
-const range = (first, count) => Array.from({ length: count }, (_, i) => first + i);
-function poses(frames) {
-  return frames.map(frame => ({
-    transform: 'translate(' + (-10 * (frame % 10)) + '%,' + (-10 * Math.floor(frame / 10)) + '%)',
-    easing: 'steps(1, end)',
-  }));
-}
-const listening = poses([...range(0, 80), 79]);
-const listeningDuration = (listening.length - 1) * frameMs;
-// Retrace the filmed arm movement into frame 79, where the listening loop turns back.
-const retract = [97, 95, 93, 91, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79];
-const reveal = poses([...range(80, 20), ...Array(7).fill(99), ...retract]);
-const revealDuration = (reveal.length - 1) * frameMs;
-const flowerSweep = 6 * frameMs;
-export const quoteRollDuration = 180;
+import { film } from './buddy-frames.js';
+import { buddyPose, waveActive } from './show-timing.js';
+import { serverNow } from './ui.js';
 
 export function createBuddyMotion(host, enabled, reducedMotion) {
-  const sheet = new Image();
-  sheet.alt = '';
-  sheet.decoding = 'async';
-  sheet.sizes = '950px';
-  sheet.srcset = [1, 2, 4].map(n => '/static/assets/buddy-film-' + n + 'x.webp ' + (1020 * n) + 'w').join(', ');
-  sheet.src = '/static/assets/buddy-film-1x.webp';
-  host.append(sheet);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = film.cell;
+  canvas.setAttribute('aria-hidden', 'true');
+  const ctx = canvas.getContext('2d');
+  host.append(canvas);
+  const pages = new Map();
+  const playPages = Math.ceil(film.playFrames / film.perPage);
+  let kind = 'idle', cue, raf, shown, awaitingWave;
+  host.dataset.motion = 'still';
 
-  let kind = 'idle', cueStart = -Infinity, listeningOrigin = 0, playback, ready = false;
-  const canPlay = () => enabled && !reducedMotion.matches && !document.hidden && kind !== 'qr';
-
-  function play() {
-    if (playback) {
-      playback.onfinish = null;
-      playback.cancel();
-      playback = null;
+  function load(key) {
+    let entry = pages.get(key);
+    if (entry && (!entry.retryAt || performance.now() < entry.retryAt)) return entry;
+    const image = new Image();
+    entry = { image, ready: false };
+    pages.set(key, entry);
+    image.src = '/static/assets/buddy-' + key + '.webp';
+    image.decode().then(() => {
+      entry.ready = true;
+      if (pages.get(key) === entry) wake();
+    }).catch(() => { entry.retryAt = performance.now() + 5000; });
+    return entry;
+  }
+  function wake() {
+    if (!raf && !document.hidden && kind !== 'qr' && enabled && ctx) raf = requestAnimationFrame(paint);
+  }
+  function finishWave(displayed) {
+    awaitingWave?.(displayed);
+    awaitingWave = undefined;
+  }
+  function paint() {
+    raf = undefined;
+    if (kind === 'qr' || document.hidden || !ctx) return;
+    const now = serverNow();
+    const pose = buddyPose(cue, now);
+    const active = waveActive(cue, now);
+    if (awaitingWave && !active) finishWave(false);
+    if (reducedMotion.matches && !active) {
+      host.removeAttribute('data-ready');
+      host.dataset.motion = 'still';
+      shown = undefined;
+      return;
     }
-    const elapsed = performance.now() - cueStart;
-    const issuing = kind === 'quote' && elapsed < revealDuration;
-    const state = ready && canPlay() ? (issuing ? 'reveal' : 'listening') : 'still';
-    host.dataset.motion = state;
-    if (state === 'still') return;
-    if (issuing) {
-      playback = sheet.animate(reveal, { id: 'buddy-reveal', duration: revealDuration, fill: 'both' });
-      playback.currentTime = elapsed;
-      playback.onfinish = () => {
-        cueStart = -Infinity;
-        play();
-      };
-    } else {
-      playback = sheet.animate(listening, {
-        id: 'buddy-listening', duration: listeningDuration, iterations: Infinity, direction: 'alternate',
-      });
-      const cycle = listeningDuration * 2;
-      playback.currentTime = ((Date.now() - listeningOrigin) % cycle + cycle) % cycle;
+    if (reducedMotion.matches) pose.frame = pose.clip === 'wave' ? 34 : 0;
+    const page = Math.floor(pose.frame / film.perPage);
+    const key = pose.clip + '-' + page;
+    const entry = load(key);
+    // Keep only the live page, its successor, and the on-demand greeting resident.
+    const playPage = pose.clip === 'play' ? page : Math.floor(film.resumeFrame / film.perPage);
+    const next = 'play-' + (playPage + 1) % playPages;
+    load('wave-0');
+    load('play-' + playPage);
+    load(next);
+    for (const name of pages.keys()) {
+      if (name !== 'wave-0' && name !== 'play-' + playPage && name !== next) pages.delete(name);
     }
+    const frameKey = pose.clip + ':' + pose.frame;
+    if (entry.ready && shown !== frameKey) {
+      const slot = pose.frame % film.perPage, cell = film.cell;
+      ctx.clearRect(0, 0, cell, cell);
+      ctx.drawImage(entry.image, slot % film.columns * cell, Math.floor(slot / film.columns) * cell,
+        cell, cell, 0, 0, cell, cell);
+      host.setAttribute('data-ready', '');
+      host.dataset.motion = pose.clip;
+      shown = frameKey;
+    }
+    if (pose.clip === 'wave' && entry.ready) finishWave(true);
+    wake();
   }
-
-  async function loaded() {
-    // A responsive source can be replaced during decode. Its own load event resumes here.
-    try { await sheet.decode(); } catch { return; }
-    if (ready) return;
-    ready = true;
-    host.setAttribute('data-ready', '');
-    play();
-  }
-  sheet.addEventListener('load', loaded);
-  sheet.addEventListener('error', () => {
-    ready = false;
-    host.removeAttribute('data-ready');
-    play();
-  });
-  if (sheet.complete && sheet.naturalWidth) loaded();
-
-  function rest() {
-    cueStart = -Infinity;
-    play();
-  }
-  reducedMotion.addEventListener('change', rest);
-  document.addEventListener('visibilitychange', rest);
-  play();
+  document.addEventListener('visibilitychange', wake);
+  reducedMotion.addEventListener('change', wake);
 
   return {
-    resize(scale) { sheet.sizes = Math.ceil(950 * scale) + 'px'; },
     show(screen) {
+      finishWave(false);
       kind = screen.kind;
-      if (kind !== 'quote' || !canPlay()) {
-        listeningOrigin = screen.publishedAt || 0;
-        if (kind === 'quote') listeningOrigin += revealDuration - listeningDuration;
-        rest();
-        return 0;
+      cue = screen.buddyCue;
+      if (kind === 'qr') {
+        cancelAnimationFrame(raf);
+        raf = undefined;
+        shown = undefined;
+        host.dataset.motion = 'still';
+        return;
       }
-      const now = performance.now();
-      // Closely spaced sends share the lift already in progress and show the latest words.
-      if (now - cueStart >= flowerSweep + quoteRollDuration) {
-        const wallTime = Date.now();
-        const age = wallTime - screen.publishedAt;
-        // Align a live send across receivers. A page reload replays even an old quote from its start.
-        const lag = age >= 0 && age < flowerSweep ? age : 0;
-        cueStart = now - lag;
-        listeningOrigin = wallTime - lag + revealDuration - listeningDuration;
-        play();
-      }
-      return ready ? Math.max(0, flowerSweep - (now - cueStart)) : 0;
+      wake();
+      if (kind === 'idle' && waveActive(cue, serverNow()) && enabled && ctx)
+        return new Promise(resolve => { awaitingWave = resolve; });
     },
   };
 }
