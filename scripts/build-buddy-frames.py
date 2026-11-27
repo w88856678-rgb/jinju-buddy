@@ -1,12 +1,15 @@
 """Build transparent frames for both 25 fps performances in the original stage coordinates.
 
-Usage: python3 scripts/build-buddy-frames.py greeting.mp4 play.mp4
+Usage: python3 scripts/build-buddy-frames.py greeting.mp4 play.mp4 [--quote-source DIR]
+For the quote action, DIR contains the original, unbadged buddy-film WebPs
+(public/assets at release 9be10fa).
 Requires ffmpeg and Pillow. Coordinates below are measured in native 512 x 128 LED pixels.
 """
 import argparse
 import json
 import shutil
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
@@ -16,6 +19,34 @@ CELL = 216
 COLUMNS = 10
 PAGE = 80
 FPS = 25
+
+@lru_cache(maxsize=1)
+def flower_art():
+    root = Path(__file__).resolve().parent / "buddy-art"
+    return (json.loads((root / "chest-flower.json").read_text()),
+            Image.open(root / "chest-flower.png").convert("RGBA"))
+
+def wear_flower(frame, motion, index):
+    # The stamp for each source pose follows the sweater and includes hand occlusion.
+    # Composite it before packing so playback needs only its original draw call.
+    meta, atlas = flower_art()
+    track = meta["motions"][motion]
+    position = track["positions"][index]
+    if position is None:
+        return frame
+    slot = track["first"] + index
+    cell = meta["cell"]
+    sx = slot % meta["columns"] * cell
+    sy = slot // meta["columns"] * cell
+    scale = frame.width / track["width"]
+    size = round(cell * scale / 2)
+    x, y = (round(v * scale) for v in position)
+    stamp = atlas.crop((sx, sy, sx + cell, sy + cell)).resize((size, size), Image.Resampling.LANCZOS)
+    patch = frame.crop((x, y, x + size, y + size))
+    rgb = Image.composite(stamp.convert("RGB"), patch.convert("RGB"), stamp.getchannel("A"))
+    rgb.putalpha(patch.getchannel("A"))
+    frame.paste(rgb, (x, y))
+    return frame
 
 def frames(path, first, count, offset):
     filters = f"trim=start_frame={first}:end_frame={first+count},scale=1024:256:flags=area,crop={CELL}:{CELL}:{offset*2}:8"
@@ -66,7 +97,7 @@ def pack(name, film):
     for i, raw in enumerate(film):
         if i % PAGE == 0:
             sheet = Image.new("RGBA", (COLUMNS * CELL, (PAGE // COLUMNS) * CELL))
-        frame = cutout(raw)
+        frame = wear_flower(cutout(raw), name, i)
         slot = i % PAGE
         sheet.paste(frame, (slot % COLUMNS * CELL, slot // COLUMNS * CELL))
         if name == "play" and i == 0:
@@ -100,6 +131,7 @@ def pack_greeting(path, count):
                 raise ValueError(f"Greeting pose outside its cell at frame {index}")
             positions.append(left)
             tile = cutout(im.crop((left, top, left + cell, top + cell)), plate_gaps=True)
+            tile = wear_flower(tile, "hello", index)
             slot = index % per_page
             if slot == 0:
                 rows = (min(per_page, count - index) + columns - 1) // columns
@@ -110,6 +142,24 @@ def pack_greeting(path, count):
         if process.wait():
             raise RuntimeError("Could not decode greeting")
     return dict(scale=scale, cell=cell, top=top, columns=columns, perPage=per_page, x=positions)
+
+
+def pack_quote(source):
+    target = ROOT / "assets"
+    if source.resolve() == target.resolve():
+        raise ValueError("Use the clean source sheets in a separate directory")
+    for scale in (1, 2, 4):
+        name = f"buddy-film-{scale}x.webp"
+        sheet = Image.open(source / name).convert("RGBA")
+        width, height = sheet.width // 10, sheet.height // 10
+        for index in range(100):
+            x, y = index % 10 * width, index // 10 * height
+            pose = sheet.crop((x, y, x + width, y + height))
+            sheet.paste(wear_flower(pose, "film", index), (x, y))
+        sheet.save(target / name, quality=91, method=4)
+    poster = "buddy-film-poster.webp"
+    still = Image.open(source / poster).convert("RGBA")
+    wear_flower(still, "film", 0).save(target / poster, quality=94, method=4)
 
 
 def build(wave, play):
@@ -135,5 +185,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wave")
     parser.add_argument("play")
+    parser.add_argument("--quote-source", type=Path, help="Directory with the original quote sheets and poster")
     args = parser.parse_args()
+    if args.quote_source:
+        pack_quote(args.quote_source)
     build(args.wave, args.play)

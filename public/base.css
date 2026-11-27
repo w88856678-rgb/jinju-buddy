@@ -188,7 +188,7 @@ summary {
   width: 108px;
   height: 108px;
   overflow: hidden;
-  background: url('/static/assets/buddy-play-poster.webp') center / contain no-repeat;
+  background: url('/static/assets/buddy-play-poster.webp?v=flower-1') center / contain no-repeat;
 }
 .led-buddy[data-ready] { background-image: none; }
 .led-buddy canvas {

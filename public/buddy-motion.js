@@ -36,7 +36,7 @@ export function createBuddyMotion(host, greetingCanvas, enabled, reducedMotion) 
     const image = new Image();
     entry = { image, ready: false };
     cache.set(key, entry);
-    image.src = '/static/assets/buddy-' + key + '.webp';
+    image.src = '/static/assets/buddy-' + key + '.webp?v=flower-1';
     entry.decoded = image.decode().then(async () => {
       if (cache === greetingSheets && typeof createImageBitmap === 'function') {
         // Keep the decoded pixels resident across a long standby. The image

@@ -41,7 +41,7 @@ try {
   // Hold the last sheet on one cold projector. An operator can cancel while it warms.
   let releaseSheet;
   const hold = new Promise(resolve => { releaseSheet = resolve; });
-  await screens[1].route('**/buddy-hello-7.webp', async route => { await hold; await route.continue(); });
+  await screens[1].route(url => url.pathname.endsWith('/buddy-hello-7.webp'), async route => { await hold; await route.continue(); });
   await Promise.all([desk.goto(app.url + '/control'),
     ...screens.map((page,i) => page.goto(app.url + '/stage?native=1&look=' + (i ? 'blue' : 'dark')))]);
   await Promise.all([desk, ...screens].map(page => page.locator('.led-buddy[data-motion="play"]').waitFor()));
