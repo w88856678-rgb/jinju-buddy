@@ -1,5 +1,5 @@
 // Shared by all visitors to the open rehearsal. Counters survive service restarts.
-const limits = { audioSeconds: 4 * 60 * 60, modelRequests: 3_600 };
+const limits = { audioSeconds: 24 * 60 * 60, modelRequests: 10_000 };
 const messages = {
   audioSeconds: '今天的公开体验收音额度已用完，仍可手写金句上屏。',
   modelRequests: '今天的公开体验提炼额度已用完，仍可手写金句上屏。',

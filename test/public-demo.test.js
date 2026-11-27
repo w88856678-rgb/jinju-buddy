@@ -48,14 +48,14 @@ test('整场访客共用持久的云调用额度，到限后手写仍能上屏',
   quota.modelRequest();
   const usage = app.store.get('publicDemoUsage');
   // An event that used up the former allowance can still record the three-hour conference.
-  app.store.set('publicDemoUsage', { ...usage, audioSeconds: 30 * 60, modelRequests: 300 });
+  app.store.set('publicDemoUsage', { ...usage, audioSeconds: 4 * 60 * 60, modelRequests: 3_600 });
   const chargeRecording = quota.startAudio();
   chargeRecording(3 * 60 * 60 * 1000);
   quota.modelRequest();
   assert.deepEqual(app.store.get('publicDemoUsage'), {
-    day: usage.day, audioSeconds: (30 + 180) * 60, modelRequests: 301,
+    day: usage.day, audioSeconds: (4 + 3) * 60 * 60, modelRequests: 3_601,
   });
-  app.store.set('publicDemoUsage', { ...usage, audioSeconds: 4 * 60 * 60 - 1, modelRequests: 3_600 - 1 });
+  app.store.set('publicDemoUsage', { ...usage, audioSeconds: 24 * 60 * 60 - 1, modelRequests: 10_000 - 1 });
   quota.modelRequest();
   await assert.rejects(extractQuoteBatch('test', [{ id: 'sample', body: '分数只描述一张试卷，无法描述一个人。' }], [], quota.modelRequest), { status: 429 });
   const mic = wire(app, 'mic', true);
