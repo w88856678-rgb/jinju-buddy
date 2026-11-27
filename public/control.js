@@ -136,10 +136,11 @@ function publishFeedback(version) {
 }
 function receiptText() {
   if (!connected) return '控台重连，画面待核对';
-  if (!online) return screen.version > 0 ? '已保存，大屏离线' : '等待投影电脑连接';
+  if (!online) return screen.version > 0 ? '已保存，尚无大屏回执' : '等待投影电脑连接';
   const shown = ackVersion === screen.version ? displayed : 0;
   if (!shown) return '已保存，等待大屏显示';
   if (shown < online) return '部分大屏已显示';
+  if (screen.kind === 'idle' && !waveActive(screen.buddyCue, serverNow())) return '大屏正在待场';
   return '大屏已显示';
 }
 let showLabelTimer, preparedGreeting, preparationTimer, previewWarm = false, cancellingGreeting = false;
@@ -202,7 +203,7 @@ function updatePresence() {
       ? online === 1
         ? '大屏已连接'
         : online + ' 块大屏已连接'
-      : '大屏未连接';
+      : '等待大屏实时连线';
   el('connection').textContent = top;
   el('connection-dot').classList.toggle('online', connected && online > 0);
   const shown = ackVersion === screen.version ? displayed : 0;

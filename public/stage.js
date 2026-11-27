@@ -9,6 +9,7 @@ const stage = document.getElementById('stage');
 const scene = createScene(stage, true);
 const status = document.getElementById('stage-status');
 let latest = -1, lastScreen, retry;
+let checkTimer, checking = false;
 async function render(message) {
   const screen = message.screen;
   if (!screen || screen.version < latest) return;
@@ -26,15 +27,42 @@ async function render(message) {
     if (!error.overflow) retry = setTimeout(() => render(lastScreen), 1800);
   }
 }
+// A socket can look connected for longer than a quote lives. A small snapshot
+// recovers a missed publication without replaying a version already on screen.
+async function checkScreen() {
+  clearTimeout(checkTimer);
+  if (checking || document.hidden) return;
+  checking = true;
+  const request = new AbortController();
+  const timeout = setTimeout(() => request.abort(), 3500);
+  try {
+    const state = await api('stage', 'GET', undefined, request.signal);
+    if (!document.hidden && state.screen.version > latest) render(state);
+  } catch {
+    // The socket and the next check can independently restore the current state.
+  } finally {
+    clearTimeout(timeout);
+    checking = false;
+    if (!document.hidden) checkTimer = setTimeout(checkScreen, 1500);
+  }
+}
 const live = connect('stage', (m) => { if (m.type === 'screen') render(m); },
   (online) => {
     status.textContent = online ? '实时连线' : '正在重连';
     if (online) scene.greetingReady.then(() => live.send({ type: 'greeting-ready' }));
+    else checkScreen();
   });
-api('stage').then(render).catch(() => {});
+checkScreen();
+window.addEventListener('online', checkScreen);
+window.addEventListener('pageshow', checkScreen);
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) live.send({ type: 'hidden' });
-  else if (lastScreen) render(lastScreen);
+  if (document.hidden) {
+    clearTimeout(checkTimer);
+    live.send({ type: 'hidden' });
+  } else {
+    checkScreen();
+    if (lastScreen) render(lastScreen);
+  }
 });
 async function fullscreen() {
   try {

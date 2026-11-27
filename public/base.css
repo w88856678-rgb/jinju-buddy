@@ -159,6 +159,14 @@ summary {
   isolation: isolate;
   color: var(--led-ink, #10243a);
   background: var(--led-background, transparent);
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* A document-wide selection can span a new quote when its text is replaced. */
+.scene::selection,
+.scene ::selection {
+  background-color: transparent;
+  color: var(--led-ink, #10243a);
 }
 [data-look='blue'] { --led-background: #bce0f8; }
 [data-look='dark'] { --led-background: #10243a; --led-ink: #f5f8fc; }

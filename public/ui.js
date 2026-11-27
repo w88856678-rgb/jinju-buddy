@@ -46,8 +46,9 @@ export function decorate(root = document) {
       '</svg>';
   });
 }
-export async function api(path, method = 'GET', data) {
+export async function api(path, method = 'GET', data, signal) {
   const options = { method, cache: 'no-store' };
+  if (signal) options.signal = signal;
   if (data !== undefined) {
     options.headers = { 'Content-Type': 'application/json' };
     options.body = JSON.stringify(data);
@@ -57,7 +58,8 @@ export async function api(path, method = 'GET', data) {
   let result;
   try {
     result = await r.json();
-  } catch {
+  } catch (error) {
+    if (signal?.aborted) throw error;
     throw new Error('后台连接中断，请稍后重试');
   }
   if (!r.ok) throw Object.assign(new Error(result.error), { status: r.status });

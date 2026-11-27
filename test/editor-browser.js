@@ -103,10 +103,25 @@ try {
   const small=desk.locator('.history-item').filter({hasText:'甲'.repeat(13)});
   await small.getByRole('button',{name:'重新展示'}).click();
   await until(()=>app.store.screen().version>smallVersion && app.store.screen().layout?.size===29);
-  // A missing film atlas must still leave a readable, acknowledged frame on a fresh stage.
+  // Cold projectors can lack an atlas or still be waiting for Tencent Sans.
   const fallback = await browser.newPage({viewport:{width:512,height:128}});
+  const remoteQuote = '我们把回访从每月一次改成每周一次';
+  let missedPush = false;
+  await fallback.addInitScript(() => {
+    const loadFont = document.fonts.load.bind(document.fonts);
+    const gate = new Promise(resolve => { window.finishStageFont = resolve; });
+    document.fonts.load = (...args) => gate.then(() => loadFont(...args));
+  });
+  await fallback.routeWebSocket(url => url.searchParams.get('role') === 'stage', socket => {
+    const upstream = socket.connectToServer();
+    upstream.onMessage(raw => {
+      const message = JSON.parse(raw);
+      if (message.type === 'screen' && message.screen.text === remoteQuote) missedPush = true;
+      else socket.send(raw);
+    });
+  });
   let atlasRequests = 0;
-  await fallback.route(/\/buddy-(?:play-\d+|film-2x)\.webp$/, route => {
+  await fallback.route(url => /\/buddy-(?:play-\d+|film-2x)\.webp$/.test(url.pathname), route => {
     atlasRequests++;
     return route.abort('failed');
   });
@@ -117,6 +132,20 @@ try {
   assert.match(await fallback.locator('.led-buddy').evaluate(n => getComputedStyle(n).backgroundImage), /buddy-play-poster/);
   assert.deepEqual(await fallback.locator('.led-quote span').allTextContents(), compactText.split('\n'));
   assert.equal(await fallback.locator('.led-quote').evaluate(n => getComputedStyle(n).fontSize), '29px');
+  await desk.locator('#quote').fill(remoteQuote);
+  await desk.locator('#manual-send').click();
+  await until(async () => {
+    const state = await (await app.call('control')).json();
+    return state.screen.text === remoteQuote && state.displayed === 2;
+  }, 5000);
+  assert(missedPush);
+  assert.equal(await fallback.locator('.led-quote').textContent(), remoteQuote);
+  await fallback.evaluate(() => window.finishStageFont());
+  await fallback.bringToFront();
+  const words = fallback.locator('.led-quote-track');
+  const normalInk = await words.screenshot();
+  await fallback.keyboard.press('ControlOrMeta+a');
+  assert((await words.screenshot()).equals(normalInk), '全选不应改变投影文字的像素');
   await fallback.close();
   mic.ws.close();
   console.log('通过：原生两行、转述归属、键盘选择和发送、编辑预览、断线重连、窄屏与校订撤卡。');

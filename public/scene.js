@@ -69,8 +69,13 @@ export function createScene(host, animate = false) {
   async function draw(screen) {
     let layout, qr;
     if (screen.kind === 'quote') {
-      await fontReady;
-      layout = screen.layout || layoutQuote(screen.text, screen.compact);
+      layout = screen.layout;
+      // Published lines already have their Tencent font size and breaks. Only
+      // legacy snapshots without a layout need local font metrics before drawing.
+      if (!layout) {
+        await fontReady;
+        layout = layoutQuote(screen.text, screen.compact);
+      }
     } else if (screen.kind === 'qr') {
       [qr] = await Promise.all([ledQr(imageUrl(screen.image)), fontReady]);
     }
