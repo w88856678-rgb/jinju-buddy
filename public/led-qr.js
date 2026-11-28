@@ -56,9 +56,9 @@ async function rasterize(url) {
   const tile = canvas(side, side);
   const ink = tile.getContext('2d', { willReadFrequently: true });
   const pad = Math.floor((side - pitch * modules) / 2);
-  ink.fillStyle = '#fff';
+  ink.fillStyle = '#edf2f4';
   ink.fillRect(0, 0, side, side);
-  ink.fillStyle = '#000';
+  ink.fillStyle = '#10243a';
   for (let row = 0; row < modules; row++) {
     for (let col = 0; col < modules; col++) {
       if ((luminance(col, row) < threshold) === (dark < light))
@@ -71,6 +71,11 @@ async function rasterize(url) {
     throw new Error('116 像素预览未能读回原码，请更换清晰黑白码或缩短总结链接。');
   tile.setAttribute('role', 'img');
   tile.setAttribute('aria-label', '扫描二维码查看总结');
+  // Trim only surplus padding. Keep a square, four-module quiet zone even for dense uploads.
+  const extra = pad - 4 * pitch;
+  const inset = Math.min(4, extra);
+  const radius = Math.min(10, 3 * (extra - inset));
+  tile.style.clipPath = 'inset(' + inset + 'px round ' + radius + 'px)';
   return { tile, pitch, target: code.data };
 }
 

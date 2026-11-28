@@ -1,6 +1,6 @@
-import { imageUrl, serverNow } from './ui.js';
+import { serverNow } from './ui.js';
 import { fontReady, layoutQuote, overflowHint } from './led-layout.js';
-import { ledQr } from './led-qr.js';
+import { createQrEnding } from './qr-ending.js';
 import { createBuddyMotion } from './buddy-motion.js';
 import { fadeDuration, quoteDeadline, quoteRollDuration, quoteRollAt, waveActive } from './show-timing.js';
 
@@ -9,15 +9,16 @@ export function createScene(host, animate = false) {
     '<div class="led-buddy" role="img" aria-label="手持小红花的 Buddy"></div>' +
     '<div class="led-words"><div class="led-quote-track"><div class="led-quote-outgoing" aria-hidden="true"></div>' +
     '<div class="led-quote" aria-live="polite" aria-atomic="true"></div></div></div>' +
-    '<div class="led-qr"><div class="led-code"></div><span>扫码看总结</span></div>' +
+    '<div class="led-qr"><canvas class="led-qr-buddy" width="224" height="200" role="img" aria-label="Buddy 递出小红花"></canvas>' +
+    '<div class="led-code"></div><span class="led-qr-title">辩论精彩时刻总结</span></div>' +
     '<canvas class="led-greeting" aria-hidden="true"></canvas></div></div>';
   const scene = host.querySelector('.scene');
   const words = scene.querySelector('.led-words');
   const track = scene.querySelector('.led-quote-track');
   const outgoing = scene.querySelector('.led-quote-outgoing');
   const quote = scene.querySelector('.led-quote');
-  const code = scene.querySelector('.led-code');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  const ending = createQrEnding(scene.querySelector('.led-qr'), animate, reduce);
   const buddy = createBuddyMotion(scene.querySelector('.led-buddy'), scene.querySelector('.led-greeting'), animate, reduce);
   new ResizeObserver(([entry]) => {
     if (entry.contentRect.width) scene.style.setProperty('--led-scale', entry.contentRect.width / 512);
@@ -67,7 +68,7 @@ export function createScene(host, animate = false) {
       { delay: -age, duration: quoteRollDuration, fill: 'backwards', easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
   }
   async function draw(screen) {
-    let layout, qr;
+    let layout;
     if (screen.kind === 'quote') {
       layout = screen.layout;
       // Published lines already have their Tencent font size and breaks. Only
@@ -76,8 +77,6 @@ export function createScene(host, animate = false) {
         await fontReady;
         layout = layoutQuote(screen.text, screen.compact);
       }
-    } else if (screen.kind === 'qr') {
-      [qr] = await Promise.all([ledQr(imageUrl(screen.image)), fontReady]);
     }
     if (screen.version !== wanted) return false;
     if (screen.kind === 'quote' && !layout) throw Object.assign(new Error(overflowHint), { overflow: true });
@@ -102,13 +101,10 @@ export function createScene(host, animate = false) {
       quote.replaceChildren();
       outgoing.replaceChildren();
     }
-    if (qr) {
-      qr.tile.dataset.image = screen.image;
-      code.replaceChildren(qr.tile);
-    }
     visible = screen;
     scene.dataset.kind = expired ? 'idle' : screen.kind;
     deadline();
+    if (screen.kind === 'qr' && !await ending.show(screen)) return false;
     if (roll) {
       const active = roll;
       await active.finished;
@@ -132,6 +128,7 @@ export function createScene(host, animate = false) {
       return Promise.resolve(screen.kind !== 'quote' || serverNow() < quoteDeadline(screen));
     if (wanted === screen.version && inFlight) return inFlight;
     wanted = screen.version;
+    if (screen.kind !== 'qr') ending.stop();
     inFlight = draw(screen).finally(() => { if (wanted === screen.version) inFlight = null; });
     return inFlight;
   }

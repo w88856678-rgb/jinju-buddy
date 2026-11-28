@@ -1,6 +1,7 @@
 """Build transparent frames for both 25 fps performances in the original stage coordinates.
 
 Usage: python3 scripts/build-buddy-frames.py greeting.mp4 play.mp4 [--quote-source DIR]
+       python3 scripts/build-buddy-frames.py --summary-only summary.mp4
 For the quote action, DIR contains the original, unbadged buddy-film WebPs
 (public/assets at release 9be10fa).
 Requires ffmpeg and Pillow. Coordinates below are measured in native 512 x 128 LED pixels.
@@ -144,6 +145,32 @@ def pack_greeting(path, count):
     return dict(scale=scale, cell=cell, top=top, columns=columns, perPage=per_page, x=positions)
 
 
+def pack_summary(source):
+    # Keep the original 25 fps and stage registration, including the flower on the sweater.
+    info = json.loads(subprocess.check_output([
+        "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+        "stream=width,height,r_frame_rate,nb_frames", "-of", "json", source
+    ]))["streams"][0]
+    if (info["width"], info["height"], info["r_frame_rate"], info["nb_frames"]) != (2048, 512, "25/1", "125"):
+        raise ValueError("Expected the 125-frame 2048 x 512 summary master")
+    width, height = 224, 200
+    count = int(info["nb_frames"])
+    sheet = Image.new("RGBA", (COLUMNS * width, ((count + COLUMNS - 1) // COLUMNS) * height))
+    cmd = ["ffmpeg", "-v", "error", "-i", source, "-vf", "scale=1024:256:flags=area,crop=224:200:8:32",
+           "-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE) as process:
+        for index in range(count):
+            data = process.stdout.read(width * height * 3)
+            if len(data) != width * height * 3:
+                raise ValueError(f"Missing summary frame {index}")
+            frame = cutout(Image.frombytes("RGB", (width, height), data))
+            sheet.paste(frame, (index % COLUMNS * width, index // COLUMNS * height))
+        if process.wait():
+            raise RuntimeError("Could not decode summary master")
+    sheet.save(ROOT / "assets/buddy-summary.webp", quality=92, method=4)
+    frame.save(ROOT / "assets/buddy-summary-hold.webp", quality=92, method=4)
+
+
 def pack_quote(source):
     target = ROOT / "assets"
     if source.resolve() == target.resolve():
@@ -183,10 +210,16 @@ def build(wave, play):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("wave")
-    parser.add_argument("play")
+    parser.add_argument("wave", nargs="?")
+    parser.add_argument("play", nargs="?")
     parser.add_argument("--quote-source", type=Path, help="Directory with the original quote sheets and poster")
+    parser.add_argument("--summary-only", type=Path, help="Build only the summary performance from its original film")
     args = parser.parse_args()
-    if args.quote_source:
-        pack_quote(args.quote_source)
-    build(args.wave, args.play)
+    if args.summary_only and not (args.wave or args.play or args.quote_source):
+        pack_summary(args.summary_only)
+    elif args.wave and args.play and not args.summary_only:
+        if args.quote_source:
+            pack_quote(args.quote_source)
+        build(args.wave, args.play)
+    else:
+        parser.error("Supply greeting.mp4 and play.mp4, or --summary-only summary.mp4")

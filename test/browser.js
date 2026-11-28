@@ -289,7 +289,8 @@ try {
       assert.equal(await control.locator('#screen-status').textContent(), '已保存，等待大屏显示');
       assert.equal(await control.locator('.confirmed-label:visible').count(), 0);
       assert.ok((await control.locator('#last-ack').textContent()).includes(quote));
-      assert.equal(await stage.locator('.led-quote').textContent(), quote);
+      await stage.locator('.scene[data-kind="qr"]').getByText('辩论精彩时刻总结').waitFor();
+      assert.equal(await stage.locator('.led-code canvas').count(), 0);
       gates[0]();
       await until(async () => (await control.locator('#screen-status').textContent()) === '部分大屏已显示');
       assert.equal(await control.locator('#receipt-count').textContent(), '1 / 2 屏回执');
