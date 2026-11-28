@@ -2,6 +2,7 @@ import { serverNow } from './ui.js';
 import { fontReady, layoutQuote, overflowHint } from './led-layout.js';
 import { createQrEnding } from './qr-ending.js';
 import { createBuddyMotion } from './buddy-motion.js';
+import { createBuddyPainter } from './buddy-painter.js';
 import { fadeDuration, quoteDeadline, quoteRollDuration, quoteRollAt, waveActive } from './show-timing.js';
 
 export function createScene(host, animate = false) {
@@ -10,7 +11,7 @@ export function createScene(host, animate = false) {
     '<div class="led-words"><div class="led-quote-track"><div class="led-quote-outgoing" aria-hidden="true"></div>' +
     '<div class="led-quote" aria-live="polite" aria-atomic="true"></div></div></div>' +
     '<div class="led-qr"><canvas class="led-qr-buddy" width="224" height="200" role="img" aria-label="Buddy 递出小红花"></canvas>' +
-    '<div class="led-code"></div><span class="led-qr-title">精彩时刻总结</span></div>' +
+    '<div class="led-summary"><div class="led-code"></div><span class="led-qr-title">精彩时刻总结</span></div></div>' +
     '<canvas class="led-greeting" aria-hidden="true"></canvas></div></div>';
   const scene = host.querySelector('.scene');
   const words = scene.querySelector('.led-words');
@@ -18,10 +19,14 @@ export function createScene(host, animate = false) {
   const outgoing = scene.querySelector('.led-quote-outgoing');
   const quote = scene.querySelector('.led-quote');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
-  const ending = createQrEnding(scene.querySelector('.led-qr'), animate, reduce);
-  const buddy = createBuddyMotion(scene.querySelector('.led-buddy'), scene.querySelector('.led-greeting'), animate, reduce);
+  const painter = createBuddyPainter(scene);
+  const ending = createQrEnding(scene.querySelector('.led-qr'), animate, reduce, painter);
+  const buddy = createBuddyMotion(scene.querySelector('.led-buddy'), scene.querySelector('.led-greeting'), animate, reduce, painter);
   new ResizeObserver(([entry]) => {
-    if (entry.contentRect.width) scene.style.setProperty('--led-scale', entry.contentRect.width / 512);
+    if (entry.contentRect.width) {
+      scene.style.setProperty('--led-scale', entry.contentRect.width / 512);
+      painter.resize(entry.contentRect.width);
+    }
   }).observe(scene);
 
   let current = -1, wanted = -1, inFlight, roll, fade, outgoingFade, timeout, visible;

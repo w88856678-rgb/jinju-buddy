@@ -196,7 +196,7 @@ summary {
   width: 108px;
   height: 108px;
   overflow: hidden;
-  background: url('/static/assets/buddy-play-poster.webp?v=flower-1') center / contain no-repeat;
+  background: url('/static/assets/buddy-play-hd-poster.webp') center / contain no-repeat;
 }
 .led-buddy[data-ready] { background-image: none; }
 .led-buddy canvas {
@@ -246,13 +246,14 @@ summary {
 .led-quote-outgoing { inset: -100% 0 100%; }
 .led-quote span, .led-quote-outgoing span { display: block; }
 .led-qr { inset: 0; }
+.led-summary { position: absolute; inset: 0; opacity: 0; }
 .led-qr-buddy {
   position: absolute;
   left: 4px;
   top: 16px;
   width: 112px;
   height: 100px;
-  background: url('/static/assets/buddy-summary-hold.webp') center / contain no-repeat;
+  background: url('/static/assets/buddy-summary-hd-hold.webp') center / contain no-repeat;
 }
 .led-qr-buddy[data-frame] { background-image: none; }
 .led-qr-title {
@@ -272,7 +273,6 @@ summary {
   top: 6px;
   width: 116px;
   height: 116px;
-  opacity: 0;
 }
 .led-code::before {
   content: '';

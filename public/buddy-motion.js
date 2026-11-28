@@ -2,7 +2,7 @@ import { film } from './buddy-frames.js';
 import { idleFrame, quotePose, waveActive } from './show-timing.js';
 import { serverNow } from './ui.js';
 
-export function createBuddyMotion(host, greetingCanvas, enabled, reducedMotion) {
+export function createBuddyMotion(host, greetingCanvas, enabled, reducedMotion, painter) {
   function actor(className) {
     const canvas = document.createElement('canvas');
     canvas.className = className;
@@ -23,7 +23,7 @@ export function createBuddyMotion(host, greetingCanvas, enabled, reducedMotion) 
   const greetingReady = new Promise(resolve => { markReady = resolve; });
   const pages = new Map();
   const playPages = Math.ceil(film.playFrames / film.perPage);
-  let screen = { kind: 'idle' }, raf, lastIdle, lastThought;
+  let screen = { kind: 'idle' }, raf;
   let lastGreeting = -1, awaitingWave;
   host.dataset.motion = 'still';
 
@@ -75,13 +75,9 @@ export function createBuddyMotion(host, greetingCanvas, enabled, reducedMotion) 
     const elapsed = now - cue.startsAt;
     if (!warmed || elapsed < -140) return false;
     const index = Math.max(0, Math.floor(elapsed / film.frameMs));
+    const page = Math.floor(index / greeting.perPage);
+    painter.draw(greet, 'hello', index, greetingSheets.get('hello-' + page).image);
     if (lastGreeting !== index) {
-      const page = Math.floor(index / greeting.perPage);
-      const slot = index % greeting.perPage, cell = greeting.cell;
-      const image = greetingSheets.get('hello-' + page).image;
-      greet.clearRect(0, 0, cell, cell);
-      greet.drawImage(image, slot % greeting.columns * cell, Math.floor(slot / greeting.columns) * cell,
-        cell, cell, 0, 0, cell, cell);
       greetingCanvas.style.transform = 'translateX(' + greeting.x[index] / greeting.scale + 'px)';
       lastGreeting = index;
     }
@@ -110,7 +106,6 @@ export function createBuddyMotion(host, greetingCanvas, enabled, reducedMotion) 
       host.removeAttribute('data-ready');
       host.removeAttribute('data-performing');
       host.dataset.motion = 'still';
-      lastIdle = lastThought = undefined;
       if (waving) wake();
       return;
     }
@@ -121,24 +116,11 @@ export function createBuddyMotion(host, greetingCanvas, enabled, reducedMotion) 
     load(next);
     for (const name of pages.keys())
       if (name !== current && name !== next && name !== 'film-2x') pages.delete(name);
-    if (entry.ready && lastIdle !== index) {
-      const slot = index % film.perPage, cell = film.cell;
-      idle.clearRect(0, 0, cell, cell);
-      idle.drawImage(entry.image, slot % film.columns * cell, Math.floor(slot / film.columns) * cell,
-        cell, cell, 0, 0, cell, cell);
-      lastIdle = index;
+    const pose = quotePose(screen, now);
+    const performing = !!pose && painter.draw(thought, 'film', pose.frame, performanceSheet.ready && performanceSheet.image);
+    if (painter.draw(idle, 'play', index, entry.ready && entry.image)) {
       host.setAttribute('data-ready', '');
     }
-    const pose = quotePose(screen, now);
-    const performing = !!pose && performanceSheet.ready;
-    if (performing && lastThought !== pose.frame) {
-      const image = performanceSheet.image;
-      const w = image.naturalWidth / 10, h = image.naturalHeight / 10;
-      thought.clearRect(0, 0, film.cell, film.cell);
-      thought.drawImage(image, pose.frame % 10 * w, Math.floor(pose.frame / 10) * h, w, h, 10, 28, 204, 184);
-      lastThought = pose.frame;
-    }
-    if (!performing) lastThought = undefined;
     host.toggleAttribute('data-performing', performing);
     host.dataset.motion = performing ? pose.clip : host.hasAttribute('data-ready') ? 'play' : 'still';
     wake();
@@ -162,6 +144,7 @@ export function createBuddyMotion(host, greetingCanvas, enabled, reducedMotion) 
     show(next) {
       finishWave(false);
       screen = next;
+      if (screen.kind === 'quote') painter.warm('film', 79);
       const waving = enabled && screen.kind === 'idle' && waveActive(screen.buddyCue, serverNow());
       if (!waving) frame.removeAttribute('data-greeting-visible');
       if (screen.kind === 'qr') {

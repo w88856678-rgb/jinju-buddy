@@ -21,7 +21,10 @@ function traceLanding() {
     if (!actor.hasAttribute('data-frame')) return;
     const frame = Number(actor.dataset.frame);
     if (trace.frames.at(-1) !== frame) trace.frames.push(frame);
-    const opacity = Number(getComputedStyle(scene.querySelector('.led-code')).opacity);
+    const group = scene.querySelector('.led-summary');
+    const opacity = Number(getComputedStyle(group).opacity);
+    if (frame < 50 && opacity === 0 && group.contains(scene.querySelector('.led-qr-title')) &&
+        group.contains(scene.querySelector('.led-code'))) trace.bothHidden = true;
     if (opacity > 0 && opacity < 1) trace.fading ??= frame;
     if (opacity === 1 && !trace.full) {
       trace.full = { frame, at: performance.timeOrigin + performance.now() };
@@ -55,6 +58,7 @@ try {
   assert.equal(published.kind, 'qr');
   const traces = await Promise.all(pages.map(page => page.evaluate(() => window.endingTrace)));
   for (const trace of traces) {
+    assert(trace.bothHidden, 'both the title and the code wait for the downstroke');
     assert(trace.fading >= 50 && trace.fading < 54, 'fade during the final downstroke');
     assert.equal(trace.full.frame, 54, 'fully visible on the original flower landing frame');
   }

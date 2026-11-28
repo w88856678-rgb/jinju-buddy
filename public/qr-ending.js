@@ -3,14 +3,14 @@ import { ledQr } from './led-qr.js';
 
 // In the approved 25 fps film Buddy starts the downstroke at 2 s
 // and the flower reaches its lowest point on frame 54 (zero based).
-const frameMs = 40, lastFrame = 124, columns = 10;
+const frameMs = 40, lastFrame = 124;
 const revealStart = 2000, revealFull = 54 * frameMs;
 
-export function createQrEnding(host, animate, reduce) {
+export function createQrEnding(host, animate, reduce, painter) {
   const actor = host.querySelector('.led-qr-buddy');
+  const summary = host.querySelector('.led-summary');
   const code = host.querySelector('.led-code');
   const context = actor.getContext('2d');
-  const { width, height } = actor;
   let sheet, loading = false, active, raf;
 
   function paint() {
@@ -20,17 +20,14 @@ export function createQrEnding(host, animate, reduce) {
     const elapsed = active.elapsed = Math.max(active.elapsed, serverNow() - active.started);
     const moving = animate && !reduce.matches;
     const frame = moving ? Math.min(lastFrame, Math.floor(elapsed / frameMs)) : lastFrame;
-    if (sheet && frame !== active.frame) {
-      context.clearRect(0, 0, width, height);
-      context.drawImage(sheet, frame % columns * width, Math.floor(frame / columns) * height,
-        width, height, 0, 0, width, height);
+    if (context && painter.draw(context, 'summary', frame, sheet) && frame !== active.frame) {
       actor.dataset.frame = String(frame);
       active.frame = frame;
     }
     const progress = moving ? (elapsed - revealStart) / (revealFull - revealStart) : Number(elapsed >= revealFull);
     const opacity = active.ready ? Math.max(0, Math.min(1, progress)) : 0;
     if (opacity !== active.opacity) {
-      code.style.opacity = String(opacity);
+      summary.style.opacity = String(opacity);
       active.opacity = opacity;
     }
     if (opacity === 1 && active.resolve) {
@@ -66,10 +63,10 @@ export function createQrEnding(host, animate, reduce) {
   }
   function show(screen) {
     stop();
-    code.style.opacity = '0';
+    summary.style.opacity = '0';
     code.replaceChildren();
     delete actor.dataset.frame;
-    context?.clearRect(0, 0, width, height);
+    if (context) painter.clear(context);
     return new Promise((resolve, reject) => {
       const run = active = { started: screen.publishedAt, elapsed: 0, frame: -1, opacity: 0, ready: false, resolve };
       preload();
@@ -85,6 +82,7 @@ export function createQrEnding(host, animate, reduce) {
   }
   document.addEventListener('visibilitychange', refresh);
   window.addEventListener('buddy-clock', refresh);
+  host.closest('.scene').addEventListener('buddy-resolution', refresh);
   window.addEventListener('online', preload);
   reduce.addEventListener('change', refresh);
   preload();

@@ -107,6 +107,9 @@ try {
   await write('「第一句，测试金句！」', '第一句测试金句');
   await waitForMotion(stage, 'listening');
   await waitForMotion(control, 'listening');
+  const sharpPose = stage.locator('.quote-pose[data-source-scale="4"]');
+  await sharpPose.waitFor();
+  assert(await sharpPose.evaluate(canvas => canvas.width >= Math.floor(canvas.getBoundingClientRect().width)));
   assert.equal(await stage.locator('.led-quote').textContent(), '第一句测试金句');
   // An intentional resend is a new publication even when the visible words match.
   await write('第一句测试金句');
@@ -290,6 +293,7 @@ try {
       assert.equal(await control.locator('.confirmed-label:visible').count(), 0);
       assert.ok((await control.locator('#last-ack').textContent()).includes(quote));
       await stage.locator('.scene[data-kind="qr"]').getByText('精彩时刻总结', { exact: true }).waitFor();
+      assert.equal(await stage.locator('.led-summary').evaluate(e => getComputedStyle(e).opacity), '0');
       assert.equal(await stage.locator('.led-code canvas').count(), 0);
       gates[0]();
       await until(async () => (await control.locator('#screen-status').textContent()) === '部分大屏已显示');
