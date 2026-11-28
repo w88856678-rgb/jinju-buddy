@@ -80,13 +80,34 @@ try {
     const options = !i && process.env.BUDDY_QR_SCREENSHOT ? { path: process.env.BUDDY_QR_SCREENSHOT } : {};
     assert.deepEqual((await scan(await page.screenshot(options)))?.binaryData, expected.binaryData);
   }
+  // Drive the actual renderer with a missed paint, while leaving both projector clocks alone.
+  const delayed = await browser.newPage({ viewport: { width: 512, height: 128 } });
+  const fixture = app.url + '/stage?missed-paint';
+  await delayed.route(fixture, route => route.fulfill({ contentType: 'text/html',
+    body: '<link rel="stylesheet" href="/static/base.css"><main></main>' }));
+  await delayed.clock.setFixedTime(new Date(published.publishedAt));
+  await delayed.goto(fixture);
+  await delayed.evaluate(async screen => {
+    const { createScene } = await import('/static/scene.js');
+    createScene(document.querySelector('main'), true).show(screen);
+  }, published);
+  const actor = delayed.locator('.led-qr-buddy');
+  await delayed.waitForFunction(() => document.querySelector('.led-code canvas') && document.querySelector('.led-qr-buddy')?.dataset.frame === '0');
+  await delayed.clock.setFixedTime(new Date(published.publishedAt + 2100));
+  await delayed.locator('.led-qr-buddy[data-frame="52"]').waitFor();
+  await delayed.clock.setFixedTime(new Date(published.publishedAt + 2240));
+  await delayed.waitForFunction(() => getComputedStyle(document.querySelector('.led-summary')).opacity === '1');
+  assert.equal(await actor.getAttribute('data-frame'), '54', 'first full QR and title still show the contact pose');
+  await delayed.clock.setFixedTime(new Date(published.publishedAt + 2320));
+  await delayed.locator('.led-qr-buddy[data-frame="58"]').waitFor();
+  await delayed.close();
   await desk.getByRole('button', { name: '回到待场' }).click();
   await Promise.all(pages.map(page => page.locator('.scene[data-kind="idle"]').waitFor()));
   await until(async () => (await (await app.call('control')).json()).displayed === 2);
   assert.deepEqual(errors, []);
   console.log('收尾独立彩排通过', JSON.stringify({ fullAfterMs, skewMs, frame: traces[1].full.frame,
     screensScanned: scans.length, modules: 17 + 4 * expected.version, lastFrame: 124,
-    heldBeyond10s: true, lateJoin: true, manualSwitch: true }));
+    heldBeyond10s: true, lateJoin: true, manualSwitch: true, missedPaintLanding: 54 }));
 } finally {
   await browser?.close();
   await app.cleanup();

@@ -4,7 +4,7 @@ import { ledQr } from './led-qr.js';
 // In the approved 25 fps film Buddy starts the downstroke at 2 s
 // and the flower reaches its lowest point on frame 54 (zero based).
 const frameMs = 40, lastFrame = 124;
-const revealStart = 2000, revealFull = 54 * frameMs;
+const landingFrame = 54, revealStart = 2000, revealFull = landingFrame * frameMs;
 
 export function createQrEnding(host, animate, reduce, painter) {
   const actor = host.querySelector('.led-qr-buddy');
@@ -15,15 +15,28 @@ export function createQrEnding(host, animate, reduce, painter) {
 
   function paint() {
     raf = undefined;
-    if (!active || document.hidden) return;
+    if (!active) return;
+    if (document.hidden) {
+      active.landingPending = false;
+      return;
+    }
     // Joining mid-show, a late image, or a clock adjustment must never replay the landing.
     const elapsed = active.elapsed = Math.max(active.elapsed, serverNow() - active.started);
     const moving = animate && !reduce.matches;
-    const frame = moving ? Math.min(lastFrame, Math.floor(elapsed / frameMs)) : lastFrame;
+    let frame = moving ? Math.min(lastFrame, Math.floor(elapsed / frameMs)) : lastFrame;
+    if (active.landingPending && elapsed >= revealFull) {
+      active.landingPending = false;
+      // Present the contact pose for one film frame even if the browser skipped
+      // a paint during the downstroke. A late join or a long interruption catches up.
+      if (moving && elapsed - revealFull < revealFull - revealStart)
+        active.holdLandingUntil = elapsed + frameMs;
+    }
+    if (moving && elapsed < active.holdLandingUntil) frame = landingFrame;
     if (context && painter.draw(context, 'summary', frame, sheet) && frame !== active.frame) {
       actor.dataset.frame = String(frame);
       active.frame = frame;
     }
+    if (moving && active.ready && active.frame >= 0 && elapsed < revealFull) active.landingPending = true;
     const progress = moving ? (elapsed - revealStart) / (revealFull - revealStart) : Number(elapsed >= revealFull);
     const opacity = active.ready ? Math.max(0, Math.min(1, progress)) : 0;
     if (opacity !== active.opacity) {
@@ -68,7 +81,8 @@ export function createQrEnding(host, animate, reduce, painter) {
     delete actor.dataset.frame;
     if (context) painter.clear(context);
     return new Promise((resolve, reject) => {
-      const run = active = { started: screen.publishedAt, elapsed: 0, frame: -1, opacity: 0, ready: false, resolve };
+      const run = active = { started: screen.publishedAt, elapsed: 0, frame: -1, opacity: 0,
+        landingPending: false, holdLandingUntil: 0, ready: false, resolve };
       preload();
       refresh();
       ledQr(imageUrl(screen.image)).then(({ tile }) => {

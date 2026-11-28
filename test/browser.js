@@ -302,6 +302,11 @@ try {
       await until(async () => (await control.locator('#receipt-count').textContent()) === '2 / 2 屏回执');
       await otherContext.close();
       await until(async () => (await control.locator('#receipt-count').textContent()) === '1 / 1 屏回执');
+      assert.equal(await control.locator('#screen-status').textContent(), '仅 1 块大屏已回执');
+      assert.match(await control.locator('#screen-count-change').innerText(), /此前收齐 2 块大屏回执，目前 1 块在线/);
+      await control.reload();
+      await control.getByRole('button', { name: '继续收音' }).waitFor();
+      await control.locator('#fewer-screens').waitFor();
     }
     const qr = stage.locator('.led-code canvas[data-image="' + newId + '"]');
     await qr.waitFor();
@@ -368,6 +373,12 @@ try {
   await control.getByRole('button', { name: '确认删除' }).click();
   await stage.locator('.scene[data-kind="idle"]').waitFor();
   await control.reload();
+  await control.locator('#fewer-screens').waitFor();
+  const keptVersion = app.store.screen().version;
+  await control.getByRole('button', { name: '按当前屏数监看' }).click();
+  assert(await control.locator('#fewer-screens').isHidden());
+  await control.getByText('大屏正在待场', { exact: true }).first().waitFor();
+  assert.equal(app.store.screen().version, keptVersion);
   await control.getByRole('button', { name: '撤销删除' }).click();
   await control.getByRole('button', { name: '展示已存二维码' }).waitFor();
   assert.equal(app.store.get('lastQr'), savedQr);

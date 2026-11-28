@@ -129,7 +129,14 @@ try {
   await until(async () => (await (await app.call('control')).json()).displayed === 2);
   assert(atlasRequests > 0);
   assert.equal(await fallback.locator('.led-buddy').getAttribute('data-motion'), 'still');
-  assert.match(await fallback.locator('.led-buddy').evaluate(n => getComputedStyle(n).backgroundImage), /buddy-play-poster/);
+  const poster = await fallback.locator('.led-buddy').evaluate(async node => {
+    const src = getComputedStyle(node).backgroundImage.match(/url\("([^"]+)"\)/)[1];
+    const image = new Image();
+    image.src = src;
+    await image.decode();
+    return [new URL(src).pathname, image.naturalWidth, image.naturalHeight];
+  });
+  assert.deepEqual(poster, ['/static/assets/buddy-play-hd-poster.webp', 432, 432]);
   assert.deepEqual(await fallback.locator('.led-quote span').allTextContents(), compactText.split('\n'));
   assert.equal(await fallback.locator('.led-quote').evaluate(n => getComputedStyle(n).fontSize), '29px');
   await desk.locator('#quote').fill(remoteQuote);

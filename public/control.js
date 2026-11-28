@@ -29,7 +29,8 @@ let clearRevisionAtOpen = 0;
 const preview = createScene(el('preview'), true);
 let fontLoaded = false, shareHost;
 let checkingMic = false;
-let pausedByOperator = false;
+const pauseKey = base + '/mic-paused';
+let pausedByOperator = loadDraft(pauseKey) === '1';
 const mic = new Microphone(updateRecording, (message) => toast(message, true));
 let live,
   connected = false,
@@ -65,6 +66,12 @@ let pendingSend,
   candidateLimit = 24;
 const draftKey = base + '/draft',
   pasteKey = base + '/paste-draft';
+const screenCountKey = base + '/confirmed-screens';
+let confirmedScreens = Number.parseInt(loadDraft(screenCountKey), 10) || 0;
+function rememberScreenCount(count) {
+  confirmedScreens = count;
+  saveDraft(screenCountKey, String(count));
+}
 function saveDraft(key, value) {
   try {
     sessionStorage.setItem(key, value);
@@ -140,6 +147,7 @@ function receiptText() {
   const shown = ackVersion === screen.version ? displayed : 0;
   if (!shown) return '已保存，等待大屏显示';
   if (shown < online) return '部分大屏已显示';
+  if (online < confirmedScreens) return '仅 ' + shown + ' 块大屏已回执';
   if (screen.kind === 'idle' && !waveActive(screen.buddyCue, serverNow())) return '大屏正在待场';
   return '大屏已显示';
 }
@@ -207,7 +215,15 @@ function updatePresence() {
   el('connection').textContent = top;
   el('connection-dot').classList.toggle('online', connected && online > 0);
   const shown = ackVersion === screen.version ? displayed : 0;
-  el('screen-dot').classList.toggle('online', connected && online > 0 && shown === online);
+  if (connected && shown > confirmedScreens) rememberScreenCount(shown);
+  const fewer = connected && online < confirmedScreens;
+  el('fewer-screens').hidden = !fewer;
+  if (fewer) {
+    const message = '此前收齐 ' + confirmedScreens + ' 块大屏回执，目前 ' + online + ' 块在线。';
+    if (el('screen-count-change').textContent !== message) el('screen-count-change').textContent = message;
+    el('accept-screen-count').hidden = !online;
+  }
+  el('screen-dot').classList.toggle('online', connected && online > 0 && shown === online && !fewer);
   el('screen-status').textContent = receiptText();
   if (toastVersion !== undefined && !el('toast').hidden) {
     if (toastVersion === screen.version) el('toast').textContent = receiptText();
@@ -234,6 +250,12 @@ function updatePresence() {
   updateQrButtons();
   releasePreparedGreeting();
 }
+el('accept-screen-count').onclick = () => {
+  if (!connected || !online || online >= confirmedScreens) return;
+  rememberScreenCount(online);
+  updatePresence();
+  el('monitor').focus({ preventScroll: true });
+};
 function updateRecording() {
   const local = mic.phase !== 'idle';
   const phase = local ? mic.phase : checkingMic && audio.state === 'idle' ? 'connecting' : audio.state;
@@ -1097,6 +1119,7 @@ el('audio-settings').ontoggle = () => { if (el('audio-settings').open) refreshDe
 el('record').onclick = async () => {
   if (['recording', 'buffering'].includes(mic.phase)) {
     pausedByOperator = true;
+    saveDraft(pauseKey, '1');
     return mic.stop();
   }
   if (checkingMic || mic.phase !== 'idle' || audio.state !== 'idle') return;
@@ -1114,6 +1137,7 @@ el('record').onclick = async () => {
     el('asr-note').hidden = true;
     await mic.start({ mode: el('speech-mode').value, deviceId: el('device').value });
     pausedByOperator = false;
+    saveDraft(pauseKey, '');
     refreshDevices();
   } catch (e) {
     el('asr-note').textContent = e.message; el('asr-note').hidden = false;
