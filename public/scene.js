@@ -10,7 +10,7 @@ export function createScene(host, animate = false) {
     '<div class="led-words"><div class="led-quote-track"><div class="led-quote-outgoing" aria-hidden="true"></div>' +
     '<div class="led-quote" aria-live="polite" aria-atomic="true"></div></div></div>' +
     '<div class="led-qr"><canvas class="led-qr-buddy" width="224" height="200" role="img" aria-label="Buddy 递出小红花"></canvas>' +
-    '<div class="led-code"></div><span class="led-qr-title">辩论精彩时刻总结</span></div>' +
+    '<div class="led-code"></div><span class="led-qr-title">精彩时刻总结</span></div>' +
     '<canvas class="led-greeting" aria-hidden="true"></canvas></div></div>';
   const scene = host.querySelector('.scene');
   const words = scene.querySelector('.led-words');

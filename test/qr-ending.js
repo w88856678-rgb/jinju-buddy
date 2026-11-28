@@ -49,7 +49,7 @@ try {
   assert(expected);
   await desk.locator('#qr-file').setInputFiles(input);
   await desk.getByRole('button', { name: '上传并展示' }).click();
-  await Promise.all(pages.map(page => page.getByText('辩论精彩时刻总结', { exact: true }).waitFor()));
+  await Promise.all(pages.map(page => page.getByText('精彩时刻总结', { exact: true }).waitFor()));
   await Promise.all(pages.map(page => page.waitForFunction(() => window.endingTrace.full)));
   const published = app.store.screen();
   assert.equal(published.kind, 'qr');
