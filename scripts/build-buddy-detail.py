@@ -73,11 +73,12 @@ def registered(source, name, positions):
     frames = decoded(source, count, (2048, 512) if greeting else (432, 432), None if greeting else "crop=432:432:0:16")
     for index, rgb in enumerate(frames):
         if greeting:
+            rgb = art.match_handheld_flower(rgb, index)
             left = positions[index] * 2
             rgb = rgb.crop((left, 64, left + 384, 448))
         old = sheet(f"buddy-{name}-{index // old_page}.webp")
         matte = tile(old, index % old_page, old_cols, size, size).getchannel("A")
-        yield art.wear_flower(original_cutout(rgb, matte), name, index)
+        yield art.wear_flower(original_cutout(rgb, matte), name, index, positions[index] if greeting else None)
 
 
 def pack(name, frames):

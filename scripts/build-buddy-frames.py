@@ -8,8 +8,8 @@ Requires ffmpeg and Pillow. Coordinates below are measured in native 512 x 128 L
 """
 import argparse
 import json
-import shutil
 import subprocess
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 
@@ -27,7 +27,68 @@ def flower_art():
     return (json.loads((root / "chest-flower.json").read_text()),
             Image.open(root / "chest-flower.png").convert("RGBA"))
 
-def wear_flower(frame, motion, index):
+@lru_cache(maxsize=1)
+def return_art():
+    root = Path(__file__).resolve().parent / "buddy-art"
+    return (json.loads((root / "return-flower.json").read_text()),
+            Image.open(root / "return-flower.webp").convert("RGBA"))
+
+
+def return_placement(index):
+    track, _ = return_art()
+    slot = index - track["firstFrame"]
+    if 0 <= slot < len(track["placements"]):
+        return track["placements"][slot]
+
+
+def match_handheld_flower(frame, index):
+    # Registered native patches from the approved mascot's handheld flower.
+    # Their write mask includes the exposed plate at the former petal edges.
+    placement = return_placement(index)
+    if placement is None:
+        return frame
+    track, atlas = return_art()
+    x, y, _ = placement
+    slot = index - track["firstFrame"]
+    width, height = track["cell"]
+    left, top = slot % track["columns"] * width, slot // track["columns"] * height
+    patch = atlas.crop((left, top, left + width, top + height))
+    if frame.size == (1024, 256):
+        patch = patch.resize((width // 2, height // 2), Image.Resampling.BOX)
+        x, y = x // 2, y // 2
+    elif frame.size != (2048, 512):
+        raise ValueError("Expected the native or half-size greeting plate")
+    frame.paste(patch.convert("RGB"), (x, y), patch.getchannel("A"))
+    return frame
+
+
+def write_greeting_movie(source, target, count, source_size=(2048, 512)):
+    # The standalone source URL also serves the corrected prop. Leave a supplied
+    # camera original intact and replace the published file only after both codecs finish.
+    if Path(source).resolve() == target.resolve():
+        return
+    with tempfile.TemporaryDirectory(dir=target.parent) as tmp:
+        out = Path(tmp) / "greeting.mp4"
+        scale = [] if source_size == (2048, 512) else ["-vf", "scale=2048:512:flags=lanczos"]
+        decode = ["ffmpeg", "-v", "error", "-i", str(source), *scale, "-pix_fmt", "rgb24", "-f", "rawvideo", "-"]
+        encode = ["ffmpeg", "-v", "error", "-f", "rawvideo", "-pixel_format", "rgb24", "-video_size",
+                  "2048x512", "-framerate", str(FPS), "-i", "-", "-an", "-c:v", "libx264", "-preset",
+                  "fast", "-crf", "12", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out)]
+        with subprocess.Popen(decode, stdout=subprocess.PIPE) as raw, subprocess.Popen(encode, stdin=subprocess.PIPE) as video:
+            for index in range(count):
+                data = raw.stdout.read(2048 * 512 * 3)
+                if len(data) != 2048 * 512 * 3:
+                    raise ValueError(f"Missing greeting frame {index}")
+                if return_placement(index) is not None:
+                    data = match_handheld_flower(Image.frombytes("RGB", (2048, 512), data), index).tobytes()
+                video.stdin.write(data)
+            video.stdin.close()
+            if raw.stdout.read(1) or raw.wait() or video.wait():
+                raise RuntimeError("Could not export the corrected greeting")
+        out.replace(target)
+
+
+def wear_flower(frame, motion, index, crop_left=None):
     # The stamp for each source pose follows the sweater and includes hand occlusion.
     # Composite it before packing so playback needs only its original draw call.
     meta, atlas = flower_art()
@@ -41,7 +102,12 @@ def wear_flower(frame, motion, index):
     sy = slot // meta["columns"] * cell
     scale = frame.width / track["width"]
     size = round(cell * scale / 2)
-    x, y = (round(v * scale) for v in position)
+    x, y = position
+    if motion == "hello" and crop_left is not None:
+        placement = return_placement(index)
+        if placement is not None:
+            x += placement[2] - crop_left  # Keep the brooch in stage coordinates as the prop widens its crop.
+    x, y = round(x * scale), round(y * scale)
     stamp = atlas.crop((sx, sy, sx + cell, sy + cell)).resize((size, size), Image.Resampling.LANCZOS)
     patch = frame.crop((x, y, x + size, y + size))
     rgb = Image.composite(stamp.convert("RGB"), patch.convert("RGB"), stamp.getchannel("A"))
@@ -123,7 +189,7 @@ def pack_greeting(path, count):
             raw = process.stdout.read(width * height * 3)
             if len(raw) != width * height * 3:
                 raise ValueError("Missing greeting frame " + str(index))
-            im = Image.frombytes("RGB", (width, height), raw)
+            im = match_handheld_flower(Image.frombytes("RGB", (width, height), raw), index)
             red, green, blue = im.split()
             bright = ImageChops.lighter(ImageChops.lighter(red, green), blue)
             bounds = bright.point(lambda v: 255 if v >= 16 else 0).getbbox()
@@ -132,7 +198,7 @@ def pack_greeting(path, count):
                 raise ValueError(f"Greeting pose outside its cell at frame {index}")
             positions.append(left)
             tile = cutout(im.crop((left, top, left + cell, top + cell)), plate_gaps=True)
-            tile = wear_flower(tile, "hello", index)
+            tile = wear_flower(tile, "hello", index, left)
             slot = index % per_page
             if slot == 0:
                 rows = (min(per_page, count - index) + columns - 1) // columns
@@ -142,7 +208,7 @@ def pack_greeting(path, count):
                 page.save(ROOT / f"assets/buddy-hello-{index // per_page}.webp", quality=89, method=4)
         if process.wait():
             raise RuntimeError("Could not decode greeting")
-    return dict(scale=scale, cell=cell, top=top, columns=columns, perPage=per_page, x=positions)
+    return dict(scale=scale, cell=cell, top=top, columns=columns, perPage=per_page, version="return-flower-1", x=positions)
 
 
 def pack_summary(source):
@@ -197,8 +263,7 @@ def build(wave, play):
     if info["r_frame_rate"] != "25/1" or info["width"] != info["height"] * 4:
         raise ValueError("Expected the original 4:1, 25 fps greeting")
     original = ROOT / "assets/buddy-greeting.mp4"
-    if Path(wave).resolve() != original.resolve():
-        shutil.copyfile(wave, original)
+    write_greeting_movie(wave, original, int(info["nb_frames"]), (info["width"], info["height"]))
     greeting = pack_greeting(wave, int(info["nb_frames"]))
     count = sum(1 for _ in pack("play", frames(play, 0, 453, 0)))
     metadata = dict(frameMs=1000//FPS, cell=CELL, columns=COLUMNS, perPage=PAGE,

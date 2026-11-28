@@ -33,7 +33,7 @@ export function createBuddyPainter(scene) {
       if (oldest) tiles.delete(oldest[0]);
     }
     image.decoding = 'async';
-    image.src = '/static/assets/buddy-' + key + '.webp';
+    image.src = '/static/assets/buddy-' + key + '.webp' + (group === 'hello' ? '?v=' + film.greeting.version : '');
     image.decode().then(() => {
       entry.ready = true;
       if (tiles.get(key) === entry) changed();
